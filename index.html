@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>vrm-tracker-lite</title>
+    <title>vrm-tracker-lite Pro</title>
     <style>
         body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: sans-serif; color: white; user-select: none; }
         #canvas { width: 100vw; height: 100vh; display: block; }
@@ -12,33 +12,33 @@
         #video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
         #overlay-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); pointer-events: none; }
         
-        #taskbar { position: fixed; top: 0; left: 0; width: 100vw; background: rgba(20, 20, 20, 0.9); backdrop-filter: blur(4px); border-bottom: 1px solid #333; z-index: 40; display: flex; flex-direction: column; padding: 5px 15px; box-sizing: border-box; font-size: 12px; gap: 5px; }
-        .taskbar-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+        #taskbar { position: fixed; top: 0; left: 0; width: 100vw; background: rgba(20, 20, 20, 0.95); backdrop-filter: blur(4px); border-bottom: 1px solid #333; z-index: 40; display: flex; flex-direction: column; padding: 6px 15px; box-sizing: border-box; font-size: 11px; gap: 6px; }
+        .taskbar-row { display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 8px; }
         .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .btn { background: #333; color: white; border: 1px solid #555; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
         .btn:hover, .btn.active { background: #444; border-color: #00ffcc; color: #00ffcc; }
-        .color-picker-wrapper { display: flex; align-items: center; gap: 5px; }
-        #bg-color { border: none; width: 20px; height: 20px; padding: 0; background: none; cursor: pointer; }
+        
+        .slider-group { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.05); padding: 3px 10px; border-radius: 4px; border: 1px solid #333; }
+        .slider-item { display: flex; align-items: center; gap: 4px; }
+        .slider-item input[type="range"] { width: 60px; accent-color: #00ffcc; margin: 0; }
 
         .status-item { display: flex; align-items: center; gap: 6px; }
         .status-dot { width: 8px; height: 8px; background: #ff4444; border-radius: 50%; display: inline-block; }
         .status-dot.active { background: #00ffcc; box-shadow: 0 0 8px #00ffcc; }
         .status-dot.error { background: #ff3333; box-shadow: 0 0 8px #ff3333; }
 
-        #drop-zone { position: fixed; top: 80px; left: 10px; padding: 15px; background: rgba(0,0,0,0.7); color: white; border: 2px dashed #aaa; border-radius: 8px; font-size: 12px; z-index: 20; text-align: center; cursor: pointer; transition: all 0.2s; }
+        #drop-zone { position: fixed; top: 110px; left: 10px; padding: 15px; background: rgba(0,0,0,0.7); color: white; border: 2px dashed #aaa; border-radius: 8px; font-size: 12px; z-index: 20; text-align: center; cursor: pointer; transition: all 0.2s; }
         #drop-zone:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
         #file-input { display: none; }
 
         #vrm-meta-panel { position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.75); padding: 12px; border-radius: 6px; font-size: 11px; border: 1px solid #444; min-width: 180px; z-index: 20; }
         #vrm-meta-panel h4 { margin: 0 0 6px 0; color: #00ffcc; font-size: 12px; border-bottom: 1px solid #444; padding-bottom: 4px; }
         .meta-line { margin: 3px 0; color: #ddd; }
-        .meta-label { color: #aaa; }
 
         #log-container { position: fixed; bottom: 140px; right: 10px; width: 240px; z-index: 20; display: flex; flex-direction: column; gap: 4px; }
-        #log-panel { height: 100px; background: rgba(0,0,0,0.8); border: 1px solid #444; border-radius: 4px; font-family: monospace; font-size: 10px; color: #00ffcc; padding: 5px; overflow-y: auto; box-sizing: border-box; }
+        #log-panel { height: 80px; background: rgba(0,0,0,0.8); border: 1px solid #444; border-radius: 4px; font-family: monospace; font-size: 10px; color: #00ffcc; padding: 5px; overflow-y: auto; box-sizing: border-box; }
         .log-entry { margin-bottom: 2px; line-height: 1.2; word-break: break-all; }
         .log-entry.err { color: #ff4444; }
-        .log-btn-wrapper { display: flex; justify-content: flex-end; }
 
         #loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 16px; background: rgba(0,0,0,0.85); padding: 25px 40px; border-radius: 8px; border: 1px solid #444; pointer-events: none; z-index: 30; text-align: center; transition: opacity 0.3s; }
         .spinner { border: 3px solid rgba(255,255,255,0.1); width: 24px; height: 24px; border-radius: 50%; border-left-color: #00ffcc; animation: spin 1s linear infinite; margin: 0 auto 10px auto; }
@@ -49,34 +49,39 @@
     <script src="https://unpkg.com/@pixiv/three-vrm@0.6.7/lib/three-vrm.js"></script>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/kalidokit@1.1.5/dist/kalidokit.umd.js"></script>
 </head>
 <body>
     <div id="taskbar">
         <div class="taskbar-row">
-            <div><strong>vrm-tracker-lite (Universal)</strong></div>
+            <div><strong>vrm-tracker-lite Pro</strong></div>
+            <div class="slider-group">
+                <span style="color:#00ffcc;">位置・向き調整:</span>
+                <div class="slider-item"><label>左右</label><input type="range" id="pos-x" min="-1" max="1" step="0.01" value="0"></div>
+                <div class="slider-item"><label>高さ</label><input type="range" id="pos-y" min="-1" max="1" step="0.01" value="0"></div>
+                <div class="slider-item"><label>奥行</label><input type="range" id="pos-z" min="-1" max="1" step="0.01" value="0"></div>
+                <div class="slider-item"><label>回転</label><input type="range" id="rot-y" min="-180" max="180" step="1" value="180"></div>
+            </div>
             <div class="controls">
                 <button id="toggle-video" class="btn">カメラ非表示</button>
-                <div class="color-picker-wrapper">
-                    <label for="bg-color">背景色:</label>
-                    <input type="color" id="bg-color" value="#1a1a1a">
-                </div>
-                <div class="status-item">
-                    <span id="status-dot" class="status-dot"></span>
-                    <span id="status-text">システム初期化中</span>
-                </div>
+                <div class="status-item"><span id="status-dot" class="status-dot"></span><span id="status-text">初期化中</span></div>
             </div>
         </div>
         <div class="taskbar-row" style="border-top: 1px solid #333; padding-top: 4px;">
+            <div class="controls" id="track-target-buttons">
+                <span style="color:#aaa;">動かす場所:</span>
+                <button class="btn active" data-target="face">顔のみ</button>
+                <button class="btn" data-target="body">顔＋からだ</button>
+                <button class="btn" data-target="all">顔＋からだ＋て</button>
+            </div>
             <div class="controls" id="expression-buttons">
-                <span style="color:#aaa; font-size:11px;">表情変更:</span>
-                <button class="btn active" data-exp="auto">自動 (0)</button>
-                <button class="btn" data-exp="happy">喜 (1)</button>
-                <button class="btn" data-exp="angry">怒 (2)</button>
-                <button class="btn" data-exp="sad">哀 (3)</button>
-                <button class="btn" data-exp="relaxed">楽 (4)</button>
-                <button class="btn" data-exp="surprised">驚 (5)</button>
+                <span style="color:#aaa;">表情変更:</span>
+                <button class="btn active" data-exp="auto">自動</button>
+                <button class="btn" data-exp="happy">喜</button>
+                <button class="btn" data-exp="angry">怒</button>
+                <button class="btn" data-exp="sad">哀</button>
+                <button class="btn" data-exp="relaxed">楽</button>
             </div>
         </div>
     </div>
@@ -86,21 +91,17 @@
     
     <div id="vrm-meta-panel">
         <h4>アバター情報</h4>
-        <div class="meta-line"><span class="meta-label">名前:</span> <span id="meta-name">向きが分かるロボ</span></div>
-        <div class="meta-line"><span class="meta-label">作者:</span> <span id="meta-author">System Generated</span></div>
-        <div class="meta-line"><span class="meta-label">規格:</span> <span id="meta-version">LOCAL</span></div>
+        <div class="meta-line">名前: <span id="meta-name">向きが分かるロボ</span></div>
+        <div class="meta-line">作者: <span id="meta-author">System Generated</span></div>
     </div>
 
     <div id="log-container">
-        <div class="log-btn-wrapper">
-            <button id="copy-log-btn" class="btn" style="padding: 1px 6px; font-size: 9px; border-color: #444;">ログをコピー</button>
-        </div>
         <div id="log-panel"></div>
     </div>
 
     <div id="loading">
         <div class="spinner"></div>
-        <div id="loading-text">カメラとAIを起動中...</div>
+        <div id="loading-text">AIとカメラを起動中...</div>
     </div>
     
     <div id="video-container">
@@ -123,47 +124,31 @@
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
         const logPanel = document.getElementById('log-panel');
-        const copyLogBtn = document.getElementById('copy-log-btn');
         
         const metaName = document.getElementById('meta-name');
         const metaAuthor = document.getElementById('meta-author');
-        const metaVersion = document.getElementById('meta-version');
+
+        // 位置スライダーの取得
+        const sliderX = document.getElementById('pos-x');
+        const sliderY = document.getElementById('pos-y');
+        const sliderZ = document.getElementById('pos-z');
+        const sliderRotY = document.getElementById('rot-y');
 
         let currentVrm = null;
         let dummyVrm = null; 
         let isUsingDummy = true;
-        let vrmVersion = "0.0"; 
         let currentExpressionMode = "auto";
-        let rawLogs = [];
+        let trackingTarget = "face"; // face, body, all
+        let basePosition = new THREE.Vector3(0, 0, 0);
 
         function addLog(text, isError = false) {
             const time = new Date().toLocaleTimeString();
-            const logText = `[${time}] ${text}`;
-            rawLogs.push(logText);
-
             const entry = document.createElement('div');
             entry.className = 'log-entry' + (isError ? ' err' : '');
-            entry.innerText = logText;
+            entry.innerText = `[${time}] ${text}`;
             logPanel.appendChild(entry);
             logPanel.scrollTop = logPanel.scrollHeight;
-            console.log(`[SYS_LOG] ${text}`);
         }
-
-        copyLogBtn.addEventListener('click', () => {
-            if (rawLogs.length === 0) return;
-            const fullLogText = rawLogs.join('\n');
-            navigator.clipboard.writeText(fullLogText).then(() => {
-                const originalText = copyLogBtn.innerText;
-                copyLogBtn.innerText = "コピー完了！";
-                copyLogBtn.style.color = "#00ffcc";
-                setTimeout(() => {
-                    copyLogBtn.innerText = originalText;
-                    copyLogBtn.style.color = "white";
-                }, 1500);
-            }).catch(err => {
-                alert("ログのコピーに失敗しました: " + err);
-            });
-        });
 
         addLog("システムを起動しています...");
 
@@ -171,7 +156,7 @@
         const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
         camera.position.set(0.0, 1.4, 0.55);
 
-        const renderer = new THREE.WebGLRenderer({ canvas: canvasElement, antialias: true, alpha: true, powerPreference: "high-performance" });
+        const renderer = new THREE.WebGLRenderer({ canvas: canvasElement, antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.2));
 
@@ -180,11 +165,11 @@
         scene.add(light);
         scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
+        // 初期アバター（ロボット）生成
         function createDummyAvatar() {
             const group = new THREE.Group();
-            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x444446, roughness: 0.4, metalness: 0.5 });
-            const faceMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, roughness: 0.2 });
-            const pointerMat = new THREE.MeshBasicMaterial({ color: 0xff3366 });
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x444446, roughness: 0.4 });
+            const faceMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc });
             
             const neckGeo = new THREE.CylinderGeometry(0.02, 0.025, 0.1);
             const neckMesh = new THREE.Mesh(neckGeo, bodyMat);
@@ -193,370 +178,281 @@
 
             const headGroup = new THREE.Group();
             headGroup.position.y = 1.4; 
-            
-            const headGeo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
-            const headMesh = new THREE.Mesh(headGeo, bodyMat);
+            const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), bodyMat);
             headGroup.add(headMesh);
 
-            const visorGeo = new THREE.BoxGeometry(0.12, 0.04, 0.02);
-            const visorMesh = new THREE.Mesh(visorGeo, faceMat);
-            visorMesh.position.set(0, 0.02, 0.065);
-            headGroup.add(visorMesh);
+            const visor = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.04, 0.02), faceMat);
+            visor.position.set(0, 0.02, 0.065);
+            headGroup.add(visor);
 
-            const noseGeo = new THREE.ConeGeometry(0.015, 0.06, 4);
-            const noseMesh = new THREE.Mesh(noseGeo, pointerMat);
-            noseMesh.position.set(0, -0.02, 0.09);
-            noseMesh.rotation.x = Math.PI / 2;
-            headGroup.add(noseMesh);
-
-            const antGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.06);
-            const antMesh = new THREE.Mesh(antGeo, pointerMat);
-            antMesh.position.set(0, 0.1, 0);
-            headGroup.add(antMesh);
-
-            const mouthGeo = new THREE.BoxGeometry(0.05, 0.008, 0.01);
-            const mouthMesh = new THREE.Mesh(mouthGeo, faceMat);
-            mouthMesh.position.set(0, -0.04, 0.07);
-            headGroup.add(mouthMesh);
+            const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.008, 0.01), faceMat);
+            mouth.position.set(0, -0.04, 0.07);
+            headGroup.add(mouth);
 
             group.add(headGroup);
             scene.add(group);
 
-            dummyVrm = { scene: group, head: headGroup, neck: neckMesh, mouth: mouthMesh, visor: visorMesh, update: () => {} };
+            dummyVrm = { scene: group, head: headGroup, neck: neckMesh, mouth: mouth, visor: visor, update: () => {} };
             camera.lookAt(0.0, 1.4, 0.0);
-            addLog("初期アバター（方向インジケータ付きロボ）を生成しました。");
+            addLog("初期アバターを生成しました。");
         }
         createDummyAvatar();
 
+        // 位置・回転のリアルタイム反映ループ
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
+            
+            const targetScene = isUsingDummy ? dummyVrm?.scene : currentVrm?.scene;
+            if (targetScene) {
+                // スライダーの値を位置と向きに反映
+                targetScene.position.x = basePosition.x + parseFloat(sliderX.value);
+                targetScene.position.y = basePosition.y + parseFloat(sliderY.value);
+                targetScene.position.z = basePosition.z + parseFloat(sliderZ.value);
+                targetScene.rotation.y = (parseFloat(sliderRotY.value) * Math.PI) / 180;
+            }
+
             if (currentVrm) { currentVrm.update(delta); }
             renderer.render(scene, camera);
         }
         animate();
 
-        function drawFaceMesh(landmarks) {
+        // 簡易プレビュー描画
+        function drawOverlay(results) {
             ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-            const hasIris = landmarks.length > 468;
-
-            for (let i = 0; i < landmarks.length; i++) {
-                const x = landmarks[i].x * overlayCanvas.width;
-                const y = landmarks[i].y * overlayCanvas.height;
-                
-                if (hasIris && i >= 468) {
-                    ctx.fillStyle = "#ff3366";
-                    ctx.fillRect(x - 1.2, y - 1.2, 2.4, 2.4);
-                } else if (i === 1 || i === 13 || i === 14) {
-                    ctx.fillStyle = "#ffcc00";
-                    ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
-                } else {
-                    ctx.fillStyle = "#00ffcc";
-                    ctx.fillRect(x - 0.8, y - 0.8, 1.6, 1.6);
-                }
+            ctx.fillStyle = "#00ffcc";
+            if (results.faceLandmarks) {
+                results.faceLandmarks.forEach(pt => ctx.fillRect(pt.x * overlayCanvas.width - 1, pt.y * overlayCanvas.height - 1, 2, 2));
+            }
+            ctx.fillStyle = "#ff3366";
+            if (results.leftHandLandmarks) {
+                results.leftHandLandmarks.forEach(pt => ctx.fillRect(pt.x * overlayCanvas.width - 2, pt.y * overlayCanvas.height - 2, 4, 4));
+            }
+            if (results.rightHandLandmarks) {
+                results.rightHandLandmarks.forEach(pt => ctx.fillRect(pt.x * overlayCanvas.width - 2, pt.y * overlayCanvas.height - 2, 4, 4));
             }
         }
 
-        // --- バージョン安全定義のVRM読み込み ---
+        // VRM読み込み
         function loadVRM(url) {
             return new Promise((resolve, reject) => {
                 try {
-                    const LoaderClass = THREE.GLTFLoader;
-                    if (!LoaderClass) {
-                        reject({ code: "ERR_NO_LOADER_CLASS", msg: "GLTFLoaderクラスライブラリがロードされていません。" });
-                        return;
-                    }
-
-                    const loader = new LoaderClass();
+                    const loader = new THREE.GLTFLoader();
                     loader.crossOrigin = 'anonymous';
-                    
                     loader.load(url, (gltf) => {
-                        try {
-                            THREE_VRM.VRM.from(gltf).then((vrm) => {
-                                if (dummyVrm && isUsingDummy) {
-                                    scene.remove(dummyVrm.scene);
-                                    isUsingDummy = false;
-                                    addLog("初期ロボットモデルを非表示にしました。");
-                                }
-                                if (currentVrm) {
-                                    scene.remove(currentVrm.scene);
-                                    currentVrm.dispose();
-                                }
+                        THREE_VRM.VRM.from(gltf).then((vrm) => {
+                            if (dummyVrm && isUsingDummy) {
+                                scene.remove(dummyVrm.scene);
+                                isUsingDummy = false;
+                            }
+                            if (currentVrm) {
+                                scene.remove(currentVrm.scene);
+                                currentVrm.dispose();
+                            }
 
-                                currentVrm = vrm;
-                                scene.add(vrm.scene);
-                                vrm.scene.rotation.y = Math.PI; 
+                            currentVrm = vrm;
+                            scene.add(vrm.scene);
 
-                                displayVrmMeta(gltf, vrm);
-                                
-                                const head = vrm.humanoid?.getBoneNode(THREE_VRM.VRMHumanBoneName.Head);
-                                if(head) {
-                                    const headWorldPos = new THREE.Vector3();
-                                    head.getWorldPosition(headWorldPos);
-                                    camera.position.set(0.0, headWorldPos.y, 0.55);
-                                    camera.lookAt(0.0, headWorldPos.y, 0.0);
-                                }
-                                resolve(vrm);
-                            }).catch(innerVrmErr => {
-                                reject({ code: "ERR_VRM_PARSE", msg: "VRMへの変換に失敗しました。", detail: innerVrmErr.message });
-                            });
-                        } catch (innerErr) {
-                            reject({ code: "ERR_PARSING_CRASH", msg: "パース処理中にスクリプトがクラッシュしました。", detail: innerErr.message });
-                        }
-                    }, undefined, (err) => {
-                        reject({ code: "ERR_GLTF_LOAD", msg: "GLTFLoaderの読み込み自体が失敗しました。", detail: err?.message || err });
-                    });
-                } catch (setupErr) {
-                    reject({ code: "ERR_SETUP", msg: "ローダーのセットアップ中に例外エラーが発生しました。", detail: setupErr.message });
-                }
+                            // ボーン位置を基準にカメラと基本位置を自動調整
+                            const head = vrm.humanoid?.getBoneNode('head');
+                            if(head) {
+                                const headWorldPos = new THREE.Vector3();
+                                head.getWorldPosition(headWorldPos);
+                                camera.position.set(0.0, headWorldPos.y, 0.55);
+                                camera.lookAt(0.0, headWorldPos.y, 0.0);
+                            }
+
+                            metaName.innerText = vrm.meta?.title || "未設定";
+                            metaAuthor.innerText = vrm.meta?.author || "未設定";
+                            addLog(`アバター構築成功: ${vrm.meta?.title || "VRM"}`);
+                            resolve(vrm);
+                        }).catch(e => reject({ code: "ERR_VRM_PARSE", detail: e.message }));
+                    }, undefined, (err) => reject({ code: "ERR_GLTF_LOAD", detail: err?.message }));
+                } catch (e) { reject({ code: "ERR_SETUP", detail: e.message }); }
             });
         }
 
-        function displayVrmMeta(gltf, vrm) {
-            let name = "不明なアバター";
-            let author = "不明な作者";
-
-            if (vrm.meta) {
-                name = vrm.meta.title || "未設定";
-                author = vrm.meta.author || "未設定";
-            }
-
-            metaName.innerText = name;
-            metaAuthor.innerText = author;
-            metaVersion.innerText = `VRM 0.x`;
-            addLog(`アバター構築成功: ${name} (VRM 0.x)`);
-        }
-
+        // AIトラッキングのメイン処理
         async function initializeSystem() {
-            const faceMesh = new FaceMesh({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+            const holistic = new Holistic({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
             });
 
-            faceMesh.setOptions({
-                maxNumFaces: 1,
-                refineLandmarks: true, 
-                minDetectionConfidence: 0.6, 
-                minTrackingConfidence: 0.6
+            holistic.setOptions({
+                modelComplexity: 1,
+                smoothLandmarks: true,
+                refineFaceLandmarks: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
             });
 
-            faceMesh.onResults((results) => {
+            holistic.onResults((results) => {
                 if (overlayCanvas.width !== videoElement.videoWidth) {
                     overlayCanvas.width = videoElement.videoWidth;
                     overlayCanvas.height = videoElement.videoHeight;
-                    addLog(`キャプチャ解像度をマッピングしました: ${overlayCanvas.width}x${overlayCanvas.height}`);
                 }
+                drawOverlay(results);
 
-                if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
-                    ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-                    return;
-                }
-                
-                const landmarks = results.multiFaceLandmarks[0];
-                drawFaceMesh(landmarks);
+                // Kalidokitで骨組みの角度計算
+                const riggedPose = Kalidokit.Pose.solve(results.poseLandmarks, results.ea, { runtime: "mediapipe", video: videoElement });
+                const riggedFace = Kalidokit.Face.solve(results.faceLandmarks, { runtime: "mediapipe", video: videoElement });
+                const riggedLeftHand = Kalidokit.Hand.solve(results.leftHandLandmarks, "Left");
+                const riggedRightHand = Kalidokit.Hand.solve(results.rightHandLandmarks, "Right");
 
-                const riggedFace = Kalidokit.Face.solve(results.multiFaceLandmarks, { runtime: "mediapipe", video: videoElement });
-                if (!riggedFace) return;
-
-                if (isUsingDummy && dummyVrm) {
+                if (isUsingDummy && dummyVrm && riggedFace) {
                     dummyVrm.head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
-                    dummyVrm.neck.rotation.set(riggedFace.head.x * 0.3, riggedFace.head.y * 0.3, riggedFace.head.z * 0.3);
-                    const eyeOpen = 1 - (riggedFace.eye.l + riggedFace.eye.r) / 2;
-                    dummyVrm.visor.scale.y = Math.max(0.1, eyeOpen);
-                    const openRatio = riggedFace.mouth.shape.A * 3 + riggedFace.mouth.shape.I * 1;
-                    dummyVrm.mouth.scale.x = Math.max(1, 1 + openRatio * 2);
                     return;
                 }
 
                 if (currentVrm) {
-                    const head = currentVrm.humanoid?.getBoneNode(THREE_VRM.VRMHumanBoneName.Head);
-                    const neck = currentVrm.humanoid?.getBoneNode(THREE_VRM.VRMHumanBoneName.Neck);
+                    const humanoid = currentVrm.humanoid;
                     
-                    if (head) head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
-                    if (neck) neck.rotation.set(riggedFace.head.x * 0.3, riggedFace.head.y * 0.3, riggedFace.head.z * 0.3);
-                    
-                    const target = currentVrm.blendShapeProxy;
-                    if (target) {
-                        if (currentExpressionMode === "auto") {
-                            target.setValue(THREE_VRM.VRMBlendShapePresetName.BlinkL, riggedFace.eye.l);
-                            target.setValue(THREE_VRM.VRMBlendShapePresetName.BlinkR, riggedFace.eye.r);
-                            target.setValue(THREE_VRM.VRMBlendShapePresetName.I, riggedFace.mouth.shape.I);
-                            target.setValue(THREE_VRM.VRMBlendShapePresetName.U, riggedFace.mouth.shape.U);
-                            target.setValue(THREE_VRM.VRMBlendShapePresetName.A, riggedFace.mouth.shape.A);
-                            [THREE_VRM.VRMBlendShapePresetName.Angry, THREE_VRM.VRMBlendShapePresetName.Fun, THREE_VRM.VRMBlendShapePresetName.Joy, THREE_VRM.VRMBlendShapePresetName.Sorrow].forEach(exp => target.setValue(exp, 0));
-                        } else {
-                            const activeExp = currentExpressionMode;
-                            let vrmPreset = THREE_VRM.VRMBlendShapePresetName.Joy;
-                            if (activeExp === 'happy') vrmPreset = THREE_VRM.VRMBlendShapePresetName.Joy;
-                            if (activeExp === 'angry') vrmPreset = THREE_VRM.VRMBlendShapePresetName.Angry;
-                            if (activeExp === 'sad') vrmPreset = THREE_VRM.VRMBlendShapePresetName.Sorrow;
-                            if (activeExp === 'relaxed') vrmPreset = THREE_VRM.VRMBlendShapePresetName.Fun;
-                            if (activeExp === 'surprised') vrmPreset = THREE_VRM.VRMBlendShapePresetName.Joy; 
-                            
-                            [THREE_VRM.VRMBlendShapePresetName.Angry, THREE_VRM.VRMBlendShapePresetName.Fun, THREE_VRM.VRMBlendShapePresetName.Joy, THREE_VRM.VRMBlendShapePresetName.Sorrow].forEach(exp => {
-                                target.setValue(exp, exp === vrmPreset ? 1.0 : 0.0);
+                    // 1. 【かお】の連動
+                    if (riggedFace) {
+                        const head = humanoid?.getBoneNode('head');
+                        const neck = humanoid?.getBoneNode('neck');
+                        if (head) head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
+                        if (neck) neck.rotation.set(riggedFace.head.x * 0.3, riggedFace.head.y * 0.3, riggedFace.head.z * 0.3);
+                        
+                        // 表情処理
+                        const target = currentVrm.blendShapeProxy;
+                        if (target) {
+                            if (currentExpressionMode === "auto") {
+                                target.setValue('blink_l', riggedFace.eye.l);
+                                target.setValue('blink_r', riggedFace.eye.r);
+                                target.setValue('i', riggedFace.mouth.shape.I);
+                                target.setValue('u', riggedFace.mouth.shape.U);
+                                target.setValue('a', riggedFace.mouth.shape.A);
+                            } else {
+                                ['angry', 'fun', 'joy', 'sorrow'].forEach(exp => target.setValue(exp, exp === currentExpressionMode ? 1.0 : 0.0));
+                            }
+                        }
+                    }
+
+                    // 2. 【からだ（上半身）】の連動 (body または all の場合)
+                    if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose) {
+                        const spine = humanoid?.getBoneNode('spine');
+                        const chest = humanoid?.getBoneNode('chest');
+                        const upperArmL = humanoid?.getBoneNode('leftUpperArm');
+                        const upperArmR = humanoid?.getBoneNode('rightUpperArm');
+                        const lowerArmL = humanoid?.getBoneNode('leftLowerArm');
+                        const lowerArmR = humanoid?.getBoneNode('rightLowerArm');
+
+                        if (spine) spine.rotation.set(riggedPose.spine.x, riggedPose.spine.y, riggedPose.spine.z);
+                        if (chest) chest.rotation.set(riggedPose.spine.x * 0.5, riggedPose.spine.y * 0.5, riggedPose.spine.z * 0.5);
+                        if (upperArmL) upperArmL.rotation.set(riggedPose.leftUpperArm.x, riggedPose.leftUpperArm.y, riggedPose.leftUpperArm.z);
+                        if (upperArmR) upperArmR.rotation.set(riggedPose.rightUpperArm.x, riggedPose.rightUpperArm.y, riggedPose.rightUpperArm.z);
+                        if (lowerArmL) lowerArmL.rotation.set(riggedPose.leftLowerArm.x, riggedPose.leftLowerArm.y, riggedPose.leftLowerArm.z);
+                        if (lowerArmR) lowerArmR.rotation.set(riggedPose.rightLowerArm.x, riggedPose.rightLowerArm.y, riggedPose.rightLowerArm.z);
+                    }
+
+                    // 3. 【て（指先）】の連動 (all の場合のみ)
+                    if (trackingTarget === "all") {
+                        if (riggedLeftHand) {
+                            const handL = humanoid?.getBoneNode('leftHand');
+                            if (handL) handL.rotation.set(riggedLeftHand.leftWrist.x, riggedLeftHand.leftWrist.y, riggedLeftHand.leftWrist.z);
+                            // 指の連動ループ（簡易）
+                            ['thumb','index','middle','ring','little'].forEach(finger => {
+                                for(let i=1; i<=3; i++) {
+                                    const bone = humanoid?.getBoneNode(`left${finger.charAt(0).toUpperCase() + finger.slice(1)}${i}`);
+                                    if(bone && riggedLeftHand[finger]) bone.rotation.z = riggedLeftHand[finger][i-1].z;
+                                }
                             });
-                            target.setValue(THREE_VRM.VRMBlendShapePresetName.BlinkL, riggedFace.eye.l);
-                            target.setValue(THREE_VRM.VRMBlendShapePresetName.BlinkR, riggedFace.eye.r);
+                        }
+                        if (riggedRightHand) {
+                            const handR = humanoid?.getBoneNode('rightHand');
+                            if (handR) handR.rotation.set(riggedRightHand.rightWrist.x, riggedRightHand.rightWrist.y, riggedRightHand.rightWrist.z);
+                            ['thumb','index','middle','ring','little'].forEach(finger => {
+                                for(let i=1; i<=3; i++) {
+                                    const bone = humanoid?.getBoneNode(`right${finger.charAt(0).toUpperCase() + finger.slice(1)}${i}`);
+                                    if(bone && riggedRightHand[finger]) bone.rotation.z = riggedRightHand[finger][i-1].z;
+                                }
+                            });
                         }
                     }
                 }
             });
 
             const cameraUtils = new Camera(videoElement, {
-                onFrame: async () => { await faceMesh.send({ image: videoElement }); },
-                width: 320,
-                height: 240
+                onFrame: async () => { await holistic.send({ image: videoElement }); },
+                width: 320, height: 240
             });
 
             try {
-                addLog("カメラデバイスの初期化ストリームを開いています...");
                 await cameraUtils.start();
-                hideLoading();
-                setSystemStatus("active", "準備完了。VRMを入れてください。");
-                addLog("高精度AIトラッキングエンジン（Iris対応）が起動しました。");
-            } catch (error) {
-                addLog("エラー: カメラアクセス拒否または未接続", true);
-                hideLoading();
-                setSystemStatus("error", "ERR_CAMERA_BLOCKED: カメラの起動に失敗しました。");
+                loadingElement.style.display = 'none';
+                statusDot.className = "status-dot active";
+                statusText.innerText = "準備完了。VRMをドロップしてください。";
+                addLog("AIトラッキングエンジンが正常に起動しました。");
+            } catch (e) {
+                addLog("カメラの起動に失敗しました。", true);
+                statusDot.className = "status-dot error";
+                statusText.innerText = "カメラエラー";
             }
         }
 
-        function hideLoading() {
-            loadingElement.style.opacity = '0';
-            setTimeout(() => loadingElement.style.display = 'none', 300);
-        }
-
-        function setSystemStatus(type, text) {
-            statusDot.className = "status-dot " + type;
-            statusText.innerText = text;
-        }
-
-        initializeSystem();
-
-        function changeExpressionMode(mode) {
-            if (isUsingDummy) {
-                addLog("初期ロボット時は表情手動固定コマンドをバイパスします。");
-                return;
-            }
-            currentExpressionMode = mode;
-            
-            const buttons = document.querySelectorAll('#expression-buttons .btn');
-            buttons.forEach(btn => {
-                if (btn.getAttribute('data-exp') === mode) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
+        // 動かす場所のボタン切り替えイベント
+        document.getElementById('track-target-buttons').addEventListener('click', (e) => {
+            if (e.target.classList.contains('btn')) {
+                document.querySelectorAll('#track-target-buttons .btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                trackingTarget = e.target.getAttribute('data-target');
+                addLog(`動かす場所を切り替えました: [${e.target.innerText}]`);
+                
+                // 切り替え時に対象外パーツのポーズを安全にリセット
+                if (currentVrm && trackingTarget !== "all") {
+                    // 指や腕のポーズを初期化する処理をここに入れるとより滑らかになります
                 }
-            });
-
-            if (mode === "auto") {
-                setSystemStatus("active", "トラッキング中 (正常)");
-                addLog("表情モード: 自動フェイストラッキングを再開。");
-            } else {
-                setSystemStatus("active", `表情固定: ${mode}`);
-                addLog(`表情固定をロックしました: [${mode}]`);
             }
-        }
+        });
 
+        // 表情切り替えイベント
         document.getElementById('expression-buttons').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn')) {
-                changeExpressionMode(e.target.getAttribute('data-exp'));
+                document.querySelectorAll('#expression-buttons .btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                currentExpressionMode = e.target.getAttribute('data-exp');
             }
         });
 
-        window.addEventListener('keydown', (e) => {
-            switch (e.key) {
-                case '1': changeExpressionMode('happy'); break;
-                case '2': changeExpressionMode('angry'); break;
-                case '3': changeExpressionMode('sad'); break;
-                case '4': changeExpressionMode('relaxed'); break;
-                case '5': changeExpressionMode('surprised'); break;
-                case '0': changeExpressionMode('auto'); break;
-            }
-        });
-
-        const toggleVideoBtn = document.getElementById('toggle-video');
-        toggleVideoBtn.addEventListener('click', () => {
-            const container = document.getElementById('video-container');
-            if (container.style.opacity === '0') {
-                container.style.opacity = '1';
-                toggleVideoBtn.innerText = "カメラ非表示";
-                addLog("プレビューを表示しました。");
-            } else {
-                container.style.opacity = '0';
-                toggleVideoBtn.innerText = "カメラ表示";
-                addLog("プレビューを非表示にしました。");
-            }
-        });
-
-        const bgColorPicker = document.getElementById('bg-color');
-        bgColorPicker.addEventListener('input', (e) => {
-            document.body.style.background = e.target.value;
-        });
-
+        // ファイルドロップ処理
         dropZone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => processFile(e.target.files[0]));
-
-        window.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.style.borderColor = '#00ffcc';
-            dropZone.style.background = 'rgba(0, 255, 204, 0.2)';
-        });
-        window.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            dropZone.style.borderColor = '#aaa';
-            dropZone.style.background = 'rgba(0,0,0,0.7)';
-        });
+        window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background = 'rgba(0, 255, 204, 0.2)'; });
+        window.addEventListener('dragleave', () => dropZone.style.background = 'rgba(0,0,0,0.7)';);
         window.addEventListener('drop', (e) => {
             e.preventDefault();
-            dropZone.style.borderColor = '#aaa';
             dropZone.style.background = 'rgba(0,0,0,0.7)';
-            const files = e.dataTransfer.files;
-            if (files && files.length > 0) processFile(files[0]);
+            if (e.dataTransfer.files.length > 0) processFile(e.dataTransfer.files[0]);
         });
 
         function processFile(file) {
-            if (!file) return;
-            
-            if (!file.name.toLowerCase().endsWith('.vrm')) {
-                const errCode = "ERR_INVALID_EXTENSION";
-                const errMsg = "読み込めるのは .vrm 形式のファイルのみです。";
-                setSystemStatus("error", `${errCode}: ${errMsg}`);
-                addLog(`エラー: ${errCode} - ${errMsg}`, true);
-                alert(`[エラーコード: ${errCode}]\n${errMsg}`);
-                return;
-            }
-
-            addLog(`ファイル読み込みリクエスト: ${file.name} (${Math.round(file.size / 1024 / 1024 * 100) / 100} MB)`);
-            loadingElement.style.display = 'block';
-            loadingElement.style.opacity = '1';
-            loadingText.innerText = "VRMアバターを解析・構築中...";
-            
+            if (!file || !file.name.toLowerCase().endsWith('.vrm')) return;
+            addLog(`ファイル読み込み中: ${file.name}`);
             const reader = new FileReader();
-            reader.onload = function (event) {
-                loadVRM(event.target.result).then(() => {
-                    hideLoading();
-                    setSystemStatus("active", "トラッキング中 (正常)");
-                }).catch(err => {
-                    console.error(err);
-                    const code = err.code || "ERR_UNKNOWN";
-                    const msg = err.msg || "未知のエラー";
-                    const detail = err.detail ? ` (${err.detail})` : "";
-                    setSystemStatus("error", `${code}: アバター生成失敗`);
-                    addLog(`構築失敗: ${code} - ${msg}${detail}`, true);
-                    alert(`[エラーコード: ${code}]\n${msg}${detail}`);
-                    hideLoading();
+            reader.onload = (e) => {
+                loadVRM(e.target.result).catch(err => {
+                    addLog(`構築失敗: ${err.code} (${err.detail})`, true);
                 });
             };
             reader.readAsDataURL(file);
         }
+
+        const toggleVideoBtn = document.getElementById('toggle-video');
+        toggleVideoBtn.addEventListener('click', () => {
+            const container = document.getElementById('video-container');
+            container.style.opacity = container.style.opacity === '0' ? '1' : '0';
+            toggleVideoBtn.innerText = container.style.opacity === '0' ? "カメラ表示" : "カメラ非表示";
+        });
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        initializeSystem();
     </script>
 </body>
 </html>
