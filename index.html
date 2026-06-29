@@ -3,14 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Light VRM Face Tracker - Advanced</title>
+    <title>vrm-tracker-lite</title>
     <style>
         body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: sans-serif; color: white; }
         #canvas { width: 100vw; height: 100vh; display: block; }
-        #video { position: fixed; bottom: 10px; right: 10px; width: 160px; height: 120px; transform: scaleX(-1); border: 2px solid #555; border-radius: 4px; z-index: 10; background: #000; }
+        #video { position: fixed; bottom: 10px; right: 10px; width: 160px; height: 120px; transform: scaleX(-1); border: 2px solid #555; border-radius: 4px; z-index: 10; background: #000; transition: opacity 0.2s; }
         
-        /* タスクバーのスタイル */
+        /* タスクバー */
         #taskbar { position: fixed; top: 0; left: 0; width: 100vw; height: 35px; background: rgba(20, 20, 20, 0.85); backdrop-filter: blur(4px); border-bottom: 1px solid #333; z-index: 40; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; box-sizing: border-box; font-size: 12px; }
+        .controls { display: flex; align-items: center; gap: 15px; }
+        .btn { background: #333; color: white; border: 1px solid #555; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+        .btn:hover { background: #444; border-color: #00ffcc; }
+        .color-picker-wrapper { display: flex; align-items: center; gap: 5px; }
+        #bg-color { border: none; width: 20px; height: 20px; padding: 0; background: none; cursor: pointer; }
+
         .status-item { display: flex; align-items: center; gap: 6px; }
         .status-dot { width: 8px; height: 8px; background: #ff4444; border-radius: 50%; display: inline-block; }
         .status-dot.active { background: #00ffcc; box-shadow: 0 0 8px #00ffcc; }
@@ -18,35 +24,51 @@
         /* ドロップ＆クリックエリア */
         #drop-zone { position: fixed; top: 50px; left: 10px; padding: 15px; background: rgba(0,0,0,0.7); color: white; border: 2px dashed #aaa; border-radius: 8px; font-size: 12px; z-index: 20; text-align: center; cursor: pointer; transition: all 0.2s; }
         #drop-zone:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
-        
-        #file-input { display: none; } /* 隠しインプット */
+        #file-input { display: none; }
 
+        /* ローディング表示 */
         #loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 16px; background: rgba(0,0,0,0.85); padding: 25px 40px; border-radius: 8px; border: 1px solid #444; pointer-events: none; z-index: 30; text-align: center; transition: opacity 0.3s; }
         .spinner { border: 3px solid rgba(255,255,255,0.1); width: 24px; height: 24px; border-radius: 50%; border-left-color: #00ffcc; animation: spin 1s linear infinite; margin: 0 auto 10px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* 操作説明表示 */
+        #guide { position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 6px; font-size: 11px; line-height: 1.4; color: #ccc; pointer-events: none; z-index: 20; }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.133.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.133.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@0.6.11/lib/three-vrm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.amd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/kalidokit@1.1.5/dist/kalidokit.umd.js"></script>
 </head>
 <body>
     <div id="taskbar">
-        <div><strong>VRM Tracker Lite</strong></div>
-        <div class="status-item">
-            <span id="status-dot" class="status-dot"></span>
-            <span id="status-text">システム初期化中</span>
+        <div><strong>vrm-tracker-lite</strong></div>
+        <div class="controls">
+            <button id="toggle-video" class="btn">カメラ非表示</button>
+            <div class="color-picker-wrapper">
+                <label for="bg-color">背景色:</label>
+                <input type="color" id="bg-color" value="#1a1a1a">
+            </div>
+            <div class="status-item">
+                <span id="status-dot" class="status-dot"></span>
+                <span id="status-text">システム初期化中</span>
+            </div>
         </div>
     </div>
 
     <input type="file" id="file-input" accept=".vrm">
     <div id="drop-zone">ここにVRMファイルを<br>ドロップ または クリック</div>
     
+    <div id="guide">
+        【表情固定ショートカット】<br>
+        [1] 喜 (Happy)  [2] 怒 (Angry)  [3] 哀 (Sad)<br>
+        [4] 楽 (Relaxed) [5] 驚 (Surprised) [0] 解除
+    </div>
+
     <div id="loading">
         <div class="spinner"></div>
-        <div id="loading-text">システム初期化中...</div>
+        <div id="loading-text">カメラとAIを起動中...</div>
     </div>
     
     <video id="video" autoplay playsinline muted></video>
@@ -61,7 +83,9 @@
         const statusText = document.getElementById('status-text');
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
+        
         let currentVrm = null;
+        let currentExpressionMode = "auto"; // "auto" または固定する表情名
 
         // --- Three.js 初期化 ---
         const scene = new THREE.Scene();
@@ -98,12 +122,13 @@
                 }
 
                 loader.load(url, (gltf) => {
+                    THREE.VRMLoaderPlugin.extractSignatures(gltf);
                     THREE.VRM.from(gltf).then((vrm) => {
                         currentVrm = vrm;
                         scene.add(vrm.scene);
                         vrm.scene.rotation.y = Math.PI; 
                         
-                        const head = vrm.humanoid.getRawBoneNode('head');
+                        const head = vrm.humanoid.getBoneNode('head') || vrm.humanoid.getRawBoneNode?.('head');
                         if(head) {
                             const headWorldPos = new THREE.Vector3();
                             head.getWorldPosition(headWorldPos);
@@ -116,10 +141,8 @@
             });
         }
 
-        // --- メインシステム並列初期化 ---
+        // --- メインシステム初期化 ---
         async function initializeSystem() {
-            updateLoadingStatus("AIモデルを展開中...", "準備中");
-
             const faceMesh = new FaceMesh({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
             });
@@ -136,18 +159,31 @@
                 const landmarks = results.multiFaceLandmarks;
                 const riggedFace = Kalidokit.Face.solve(landmarks, { runtime: "mediapipe", video: videoElement });
                 if (riggedFace) {
-                    const head = currentVrm.humanoid.getRawBoneNode('head');
-                    const neck = currentVrm.humanoid.getRawBoneNode('neck');
+                    const head = currentVrm.humanoid.getBoneNode('head') || currentVrm.humanoid.getRawBoneNode?.('head');
+                    const neck = currentVrm.humanoid.getBoneNode('neck') || currentVrm.humanoid.getRawBoneNode?.('neck');
+                    
                     if (head) head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
                     if (neck) neck.rotation.set(riggedFace.head.x * 0.3, riggedFace.head.y * 0.3, riggedFace.head.z * 0.3);
                     
-                    const s = currentVrm.expressionManager;
-                    if (s) {
-                        s.setValue('blinkLeft', riggedFace.eye.l);
-                        s.setValue('blinkRight', riggedFace.eye.r);
-                        s.setValue('ih', riggedFace.mouth.shape.I);
-                        s.setValue('ou', riggedFace.mouth.shape.U);
-                        s.setValue('aa', riggedFace.mouth.shape.A);
+                    const target = currentVrm.expressionManager || currentVrm.blendShapeProxy;
+                    if (target) {
+                        if (currentExpressionMode === "auto") {
+                            // 通常のリアルトラッキングモード
+                            target.setValue('blinkLeft', riggedFace.eye.l);
+                            target.setValue('blinkRight', riggedFace.eye.r);
+                            target.setValue('ih', riggedFace.mouth.shape.I);
+                            target.setValue('ou', riggedFace.mouth.shape.U);
+                            target.setValue('aa', riggedFace.mouth.shape.A);
+                            // 固定モードから戻った時のためにキー表情をリセット
+                            ['happy', 'angry', 'sad', 'relaxed', 'surprised'].forEach(exp => target.setValue(exp, 0));
+                        } else {
+                            // 数字キーによる表情固定モード（まばたきと口パクだけトラッキングをブレンド）
+                            ['happy', 'angry', 'sad', 'relaxed', 'surprised'].forEach(exp => {
+                                target.setValue(exp, exp === currentExpressionMode ? 1.0 : 0.0);
+                            });
+                            target.setValue('blinkLeft', riggedFace.eye.l);
+                            target.setValue('blinkRight', riggedFace.eye.r);
+                        }
                     }
                 }
             });
@@ -158,51 +194,81 @@
                 height: 240
             });
 
-            updateLoadingStatus("カメラとアバターを並列ロード中...", "読込中");
-            
-            // 初回に読み込むサンプルVRM（必要に応じて有効なURLに変更してください）
-            const initVrmPromise = loadVRM('https://vrm-samples.github.io/vrm-samples/models/vrm/three-vrm-girl/three-vrm-girl-1.0-beta.vrm')
-                                    .catch(() => console.log("初期アバターロードをスキップ。ファイルをドロップしてください。"));
-
             try {
-                await Promise.all([
-                    cameraUtils.start(),
-                    initVrmPromise
-                ]);
-                
-                // 完了時処理
-                loadingElement.style.opacity = '0';
-                setTimeout(() => loadingElement.style.display = 'none', 300);
-                
+                await cameraUtils.start();
+                hideLoading();
                 statusDot.classList.add('active');
-                statusText.innerText = "トラッキング中 (正常)";
+                statusText.innerText = "準備完了。VRMを入れてください。";
             } catch (error) {
                 console.error(error);
-                loadingText.innerText = "エラーが発生しました。";
-                statusText.innerText = "エラー";
+                hideLoading();
+                statusText.innerText = "カメラ起動エラー";
             }
         }
 
-        function updateLoadingStatus(loadingMsg, barMsg) {
-            loadingText.innerText = loadingMsg;
-            statusText.innerText = barMsg;
+        function hideLoading() {
+            loadingElement.style.opacity = '0';
+            setTimeout(() => loadingElement.style.display = 'none', 300);
         }
 
-        // 実行
         initializeSystem();
 
-        // --- ファイル選択・アップロード関連のイベント ---
-        
-        // クリックしたら隠しInputを発火させる
-        dropZone.addEventListener('click', () => fileInput.click());
+        // --- 拡張UIコントロールのイベント ---
 
-        // ファイルが選択された時
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            processFile(file);
+        // 1. カメラの表示/非表示切り替え
+        const toggleVideoBtn = document.getElementById('toggle-video');
+        toggleVideoBtn.addEventListener('click', () => {
+            if (videoElement.style.opacity === '0') {
+                videoElement.style.opacity = '1';
+                toggleVideoBtn.innerText = "カメラ非表示";
+            } else {
+                videoElement.style.opacity = '0';
+                toggleVideoBtn.innerText = "カメラ表示";
+            }
         });
 
-        // ドラッグ＆ドロップ時の挙動
+        // 2. 背景色のリアルタイム変更
+        const bgColorPicker = document.getElementById('bg-color');
+        bgColorPicker.addEventListener('input', (e) => {
+            document.body.style.background = e.target.value;
+        });
+
+        // 3. 数字キーによる表情切り替え
+        window.addEventListener('keydown', (e) => {
+            if (!currentVrm) return;
+            
+            switch (e.key) {
+                case '1':
+                    currentExpressionMode = 'happy';
+                    statusText.innerText = "表情固定: 喜 (Happy)";
+                    break;
+                case '2':
+                    currentExpressionMode = 'angry';
+                    statusText.innerText = "表情固定: 怒 (Angry)";
+                    break;
+                case '3':
+                    currentExpressionMode = 'sad';
+                    statusText.innerText = "表情固定: 哀 (Sad)";
+                    break;
+                case '4':
+                    currentExpressionMode = 'relaxed';
+                    statusText.innerText = "表情固定: 楽 (Relaxed)";
+                    break;
+                case '5':
+                    currentExpressionMode = 'surprised';
+                    statusText.innerText = "表情固定: 驚 (Surprised)";
+                    break;
+                case '0':
+                    currentExpressionMode = 'auto';
+                    statusText.innerText = "トラッキング中 (正常)";
+                    break;
+            }
+        });
+
+        // --- ファイル選択・アップロード関連 ---
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => processFile(e.target.files[0]));
+
         window.addEventListener('dragover', (e) => {
             e.preventDefault();
             dropZone.style.borderColor = '#00ffcc';
@@ -218,24 +284,25 @@
             dropZone.style.borderColor = '#aaa';
             dropZone.style.background = 'rgba(0,0,0,0.7)';
             const files = e.dataTransfer.files;
-            if (files && files.length > 0) {
-                processFile(files[0]);
-            }
+            if (files && files.length > 0) processFile(files[0]);
         });
 
-        // ファイルのバリデーションと読み込み
         function processFile(file) {
             if (!file) return;
             if (file.name.toLowerCase().endsWith('.vrm')) {
                 loadingElement.style.display = 'block';
                 loadingElement.style.opacity = '1';
-                loadingText.innerText = "VRMアバターを構築中...";
+                loadingText.innerText = "VRMアバターを解析・構築中...";
                 
                 const reader = new FileReader();
                 reader.onload = function (event) {
                     loadVRM(event.target.result).then(() => {
-                        loadingElement.style.opacity = '0';
-                        setTimeout(() => loadingElement.style.display = 'none', 300);
+                        hideLoading();
+                        statusText.innerText = "トラッキング中 (正常)";
+                    }).catch(err => {
+                        console.error(err);
+                        alert("VRMの構築に失敗しました。");
+                        hideLoading();
                     });
                 };
                 reader.readAsDataURL(file);
