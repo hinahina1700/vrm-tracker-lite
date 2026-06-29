@@ -28,7 +28,7 @@
         #file-input { display: none; }
 
         /* アバター概要（情報表示）パネル */
-        #vrm-meta-panel { position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.75); padding: 12px; border-radius: 6px; font-size: 11px; border: 1px solid #444; min-width: 180px; z-index: 20; display: none; }
+        #vrm-meta-panel { position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.75); padding: 12px; border-radius: 6px; font-size: 11px; border: 1px solid #444; min-width: 180px; z-index: 20; }
         #vrm-meta-panel h4 { margin: 0 0 6px 0; color: #00ffcc; font-size: 12px; border-bottom: 1px solid #444; padding-bottom: 4px; }
         .meta-line { margin: 3px 0; color: #ddd; }
         .meta-label { color: #aaa; }
@@ -41,9 +41,9 @@
         .spinner { border: 3px solid rgba(255,255,255,0.1); width: 24px; height: 24px; border-radius: 50%; border-left-color: #00ffcc; animation: spin 1s linear infinite; margin: 0 auto 10px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.amd.js"></script>
+    <script src="https://unpkg.com/three@0.154.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.154.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://unpkg.com/@pixiv/three-vrm@2.1.0/lib/three-vrm.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/kalidokit@1.1.5/dist/kalidokit.umd.js"></script>
@@ -69,9 +69,9 @@
     
     <div id="vrm-meta-panel">
         <h4>アバター情報</h4>
-        <div class="meta-line"><span class="meta-label">名前:</span> <span id="meta-name">-</span></div>
-        <div class="meta-line"><span class="meta-label">作者:</span> <span id="meta-author">-</span></div>
-        <div class="meta-line"><span class="meta-label">規格:</span> <span id="meta-version">-</span></div>
+        <div class="meta-line"><span class="meta-label">名前:</span> <span id="meta-name">初期アバター</span></div>
+        <div class="meta-line"><span class="meta-label">作者:</span> <span id="meta-author">System Generated</span></div>
+        <div class="meta-line"><span class="meta-label">規格:</span> <span id="meta-version">LOCAL</span></div>
     </div>
 
     <div id="guide">
@@ -105,13 +105,15 @@
         const metaVersion = document.getElementById('meta-version');
 
         let currentVrm = null;
-        let vrmVersion = "1.0"; // 自動判別したバージョンを保持する変数
+        let dummyVrm = null; // 初期表示用の簡易モデルのボーン参照用
+        let isUsingDummy = true;
+        let vrmVersion = "1.0"; 
         let currentExpressionMode = "auto";
 
         // --- Three.js 初期化 ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
-        camera.position.set(0.0, 1.4, 1.2);
+        camera.position.set(0.0, 1.4, 0.55);
 
         const renderer = new THREE.WebGLRenderer({ canvas: canvasElement, antialias: true, alpha: true, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -122,6 +124,62 @@
         scene.add(light);
         scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
+        // --- 1. コード生成型の超軽量初期アバターの構築 ---
+        function createDummyAvatar() {
+            const group = new THREE.Group();
+            
+            // 首（Neck）
+            const neckGeo = new THREE.CylinderGeometry(0.03, 0.035, 0.1);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3a99ff, roughness: 0.5 });
+            const neckMesh = new THREE.Mesh(neckGeo, bodyMat);
+            neckMesh.position.y = 1.25;
+            group.add(neckMesh);
+
+            // 頭（Head）ベース
+            const headGroup = new THREE.Group();
+            headGroup.position.y = 1.4; // 首の上に配置
+            
+            const headGeo = new THREE.SphereGeometry(0.09, 32, 32);
+            const faceMat = new THREE.MeshStandardMaterial({ color: 0xffddaa, roughness: 0.6 });
+            const headMesh = new THREE.Mesh(headGeo, faceMat);
+            headGroup.add(headMesh);
+
+            // 目（トラッキングの連動がわかるように配置）
+            const eyeGeo = new THREE.SphereGeometry(0.015, 16, 16);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+            
+            const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+            leftEye.position.set(0.03, 0.02, 0.08);
+            const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+            rightEye.position.set(-0.03, 0.02, 0.08);
+            
+            headGroup.add(leftEye);
+            headGroup.add(rightEye);
+
+            // 口（簡易）
+            const mouthGeo = new THREE.BoxGeometry(0.03, 0.006, 0.01);
+            const mouthMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+            const mouthMesh = new THREE.Mesh(mouthGeo, mouthMat);
+            mouthMesh.position.set(0, -0.03, 0.085);
+            headGroup.add(mouthMesh);
+
+            group.add(headGroup);
+            scene.add(group);
+
+            // トラッキング時に直接回転を制御できるようにオブジェクトの参照を保持
+            dummyVrm = {
+                scene: group,
+                head: headGroup,
+                neck: neckMesh,
+                leftEye: leftEye,
+                rightEye: rightEye,
+                mouth: mouthMesh,
+                update: () => {} // インターフェース互換用
+            };
+            camera.lookAt(0.0, 1.4, 0.0);
+        }
+        createDummyAvatar();
+
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
@@ -131,16 +189,20 @@
         }
         animate();
 
-        // --- VRM読み込み処理（0.0と1.0を自動判定してコンパイル） ---
+        // --- VRM読み込み処理（0.0と1.0自動切り替え） ---
         function loadVRM(url) {
             return new Promise((resolve, reject) => {
                 const loader = new THREE.GLTFLoader();
                 loader.crossOrigin = 'anonymous';
                 
-                // 0.0互換プラグインと1.0用プラグインの両方を登録（これが両対応の肝）
+                // 0.0 と 1.0 の両対応プラグインを登録
                 loader.register((parser) => new THREE_VRM.VRM0CompatPlugin(parser));
                 loader.register((parser) => new THREE_VRM.VRMLoaderPlugin(parser));
                 
+                if (dummyVrm && isUsingDummy) {
+                    scene.remove(dummyVrm.scene);
+                    isUsingDummy = false;
+                }
                 if (currentVrm) {
                     scene.remove(currentVrm.scene);
                     THREE_VRM.VRMUtils.deepDispose(currentVrm.scene);
@@ -149,7 +211,7 @@
                 loader.load(url, (gltf) => {
                     const vrm = gltf.userData.vrm;
                     if (!vrm) {
-                        reject({ code: "ERR_NOT_VRM", msg: "VRMデータの解析（パース）に失敗しました。ファイルが壊れている可能性があります。" });
+                        reject({ code: "ERR_NOT_VRM", msg: "VRMデータのパースに失敗しました。" });
                         return;
                     }
                     
@@ -157,10 +219,9 @@
                     scene.add(vrm.scene);
                     vrm.scene.rotation.y = Math.PI; 
 
-                    // 概要情報（メタデータ）の抽出と表示
                     displayVrmMeta(gltf, vrm);
                     
-                    // カメラ位置をアバターの頭に自動合わせ
+                    // カメラ位置をアバターの頭に合わせて最適化
                     const head = vrm.humanoid.getBoneNode('head');
                     if(head) {
                         const headWorldPos = new THREE.Vector3();
@@ -170,14 +231,12 @@
                     }
                     resolve(vrm);
                 }, undefined, (err) => {
-                    reject({ code: "ERR_LOAD_FAILED", msg: "ファイルの読み込みに失敗しました。GLTFの構造に問題があります。", detail: err });
+                    reject({ code: "ERR_LOAD_FAILED", msg: "GLTF形式の破損、またはロード失敗。", detail: err });
                 });
             });
         }
 
-        // メタデータを解析して画面に描画する関数
         function displayVrmMeta(gltf, vrm) {
-            // 規格バージョンの判定
             const isVrm0 = gltf.parser.json.extensions && gltf.parser.json.extensions.VRM;
             vrmVersion = isVrm0 ? "0.0" : "1.0";
             
@@ -193,14 +252,12 @@
                 author = meta0.author || "未設定";
             }
 
-            // UIに反映
             metaName.innerText = name;
             metaAuthor.innerText = author;
             metaVersion.innerText = `VRM ${vrmVersion}`;
-            metaPanel.style.display = 'block'; // パネルを表示
         }
 
-        // --- メインシステム初期化 ---
+        // --- メインAI・トラッキングシステム初期化 ---
         async function initializeSystem() {
             const faceMesh = new FaceMesh({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
@@ -214,22 +271,38 @@
             });
 
             faceMesh.onResults((results) => {
-                if (!currentVrm || !results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return;
+                if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return;
                 const landmarks = results.multiFaceLandmarks;
                 const riggedFace = Kalidokit.Face.solve(landmarks, { runtime: "mediapipe", video: videoElement });
-                if (riggedFace) {
+                if (!riggedFace) return;
+
+                // 2. 初期アバター（ダミー）のリアルタイム駆動処理
+                if (isUsingDummy && dummyVrm) {
+                    dummyVrm.head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
+                    dummyVrm.neck.rotation.set(riggedFace.head.x * 0.3, riggedFace.head.y * 0.3, riggedFace.head.z * 0.3);
+                    
+                    // まばたき連動（目のサイズをスケール変更）
+                    dummyVrm.leftEye.scale.y = Math.max(0.1, 1 - riggedFace.eye.l * 1.2);
+                    dummyVrm.rightEye.scale.y = Math.max(0.1, 1 - riggedFace.eye.r * 1.2);
+                    
+                    // 口パク連動（あ、い、う の大きさを簡易ブレンドして口を広げる）
+                    const openRatio = riggedFace.mouth.shape.A * 3 + riggedFace.mouth.shape.I * 1;
+                    dummyVrm.mouth.scale.y = Math.max(1, openRatio * 4);
+                    return;
+                }
+
+                // 3. ユーザーがドロップした本物のVRMアバターの駆動処理
+                if (currentVrm) {
                     const head = currentVrm.humanoid.getBoneNode('head');
                     const neck = currentVrm.humanoid.getBoneNode('neck');
                     
                     if (head) head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
                     if (neck) neck.rotation.set(riggedFace.head.x * 0.3, riggedFace.head.y * 0.3, riggedFace.head.z * 0.3);
                     
-                    // 表情マネージャー（0.0形式の互換プロキシも自動カバーされます）
                     const target = currentVrm.expressionManager || currentVrm.blendShapeProxy;
                     if (target) {
                         if (currentExpressionMode === "auto") {
                             if (vrmVersion === "1.0") {
-                                // VRM 1.0用の表情キー
                                 target.setValue('blinkLeft', riggedFace.eye.l);
                                 target.setValue('blinkRight', riggedFace.eye.r);
                                 target.setValue('i', riggedFace.mouth.shape.I);
@@ -237,7 +310,6 @@
                                 target.setValue('a', riggedFace.mouth.shape.A);
                                 ['happy', 'angry', 'sad', 'relaxed', 'surprised'].forEach(exp => target.setValue(exp, 0));
                             } else {
-                                // VRM 0.0用の表情キー
                                 target.setValue('blink_l', riggedFace.eye.l);
                                 target.setValue('blink_r', riggedFace.eye.r);
                                 target.setValue('i', riggedFace.mouth.shape.I);
@@ -246,9 +318,7 @@
                                 ['happy', 'angry', 'sad', 'fun', 'joy'].forEach(exp => target.setValue(exp, 0));
                             }
                         } else {
-                            // 数字キー固定モード
                             const activeExp = currentExpressionMode;
-                            // 0.0用にrelaxedをfunに、surprisedをjoyにマッピング変換
                             const activeExp0 = activeExp === 'relaxed' ? 'fun' : (activeExp === 'surprised' ? 'joy' : activeExp);
                             
                             if (vrmVersion === "1.0") {
@@ -298,7 +368,7 @@
 
         initializeSystem();
 
-        // --- 拡張UIコントロールのイベント ---
+        // --- UIイベント ---
         const toggleVideoBtn = document.getElementById('toggle-video');
         toggleVideoBtn.addEventListener('click', () => {
             if (videoElement.style.opacity === '0') {
@@ -316,7 +386,7 @@
         });
 
         window.addEventListener('keydown', (e) => {
-            if (!currentVrm) return;
+            if (isUsingDummy) return; // ダミーアバター時は数字キー固定はスキップ
             switch (e.key) {
                 case '1': currentExpressionMode = 'happy'; setSystemStatus("active", "表情固定: 喜 (happy)"); break;
                 case '2': currentExpressionMode = 'angry'; setSystemStatus("active", "表情固定: 怒 (angry)"); break;
@@ -327,7 +397,7 @@
             }
         });
 
-        // --- ファイルアップロード & エラーハンドリング強化 ---
+        // --- ファイルアップロード関連 ---
         dropZone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => processFile(e.target.files[0]));
 
@@ -352,7 +422,6 @@
         function processFile(file) {
             if (!file) return;
             
-            // エラーチェック1: 拡張子チェック
             if (!file.name.toLowerCase().endsWith('.vrm')) {
                 const errCode = "ERR_INVALID_EXTENSION";
                 const errMsg = "読み込めるのは .vrm 形式のファイルのみです。";
@@ -371,22 +440,13 @@
                     hideLoading();
                     setSystemStatus("active", "トラッキング中 (正常)");
                 }).catch(err => {
-                    // エラーチェック2: パースエラーや内部データ破損
                     console.error(err);
                     const code = err.code || "ERR_UNKNOWN";
                     const msg = err.msg || "VRMアバターの構築中に未知のエラーが発生しました。";
-                    
                     setSystemStatus("error", `${code}: アバター生成失敗`);
-                    alert(`[エラーコード: ${code}]\n${msg}\n\n※ファイルが壊れていないか、正しいVRMファイルか確認してください。`);
+                    alert(`[エラーコード: ${code}]\n${msg}`);
                     hideLoading();
                 });
-            };
-            reader.onerror = function() {
-                const errCode = "ERR_FILE_READ";
-                const errMsg = "PC内からのファイルデータの読み込み自体に失敗しました。";
-                setSystemStatus("error", `${errCode}: ブラウザエラー`);
-                alert(`[エラーコード: ${errCode}]\n${errMsg}`);
-                hideLoading();
             };
             reader.readAsDataURL(file);
         }
