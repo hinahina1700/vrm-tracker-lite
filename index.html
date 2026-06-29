@@ -44,9 +44,10 @@
         .spinner { border: 3px solid rgba(255,255,255,0.1); width: 24px; height: 24px; border-radius: 50%; border-left-color: #00ffcc; animation: spin 1s linear infinite; margin: 0 auto 10px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
-    <script src="https://unpkg.com/three@0.154.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.154.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://unpkg.com/@pixiv/three-vrm@2.1.0/lib/three-vrm.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://unpkg.com/@pixiv/three-vrm@0.6.7/lib/three-vrm.js"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/kalidokit@1.1.5/dist/kalidokit.umd.js"></script>
@@ -131,7 +132,7 @@
         let currentVrm = null;
         let dummyVrm = null; 
         let isUsingDummy = true;
-        let vrmVersion = "1.0"; 
+        let vrmVersion = "0.0"; 
         let currentExpressionMode = "auto";
         let rawLogs = [];
 
@@ -257,12 +258,11 @@
             }
         }
 
-        // --- 修正されたGLTFLoader安全呼出処理 ---
+        // --- バージョン安全定義のVRM読み込み ---
         function loadVRM(url) {
             return new Promise((resolve, reject) => {
                 try {
-                    // CDN仕様の変更に対応するための互換レイヤー
-                    const LoaderClass = THREE.GLTFLoader || (window.org && window.org.gltfloader && window.org.gltfloader.GLTFLoader);
+                    const LoaderClass = THREE.GLTFLoader;
                     if (!LoaderClass) {
                         reject({ code: "ERR_NO_LOADER_CLASS", msg: "GLTFLoaderクラスライブラリがロードされていません。" });
                         return;
@@ -271,41 +271,36 @@
                     const loader = new LoaderClass();
                     loader.crossOrigin = 'anonymous';
                     
-                    loader.register((parser) => new THREE_VRM.VRM0CompatPlugin(parser));
-                    loader.register((parser) => new THREE_VRM.VRMLoaderPlugin(parser));
-                    
                     loader.load(url, (gltf) => {
                         try {
-                            const vrm = gltf.userData.vrm || gltf.userData.vrm1;
-                            if (!vrm) {
-                                reject({ code: "ERR_NOT_VRM", msg: "GLTFオブジェクト内にVRM拡張データが見つかりません。" });
-                                return;
-                            }
-                            
-                            if (dummyVrm && isUsingDummy) {
-                                scene.remove(dummyVrm.scene);
-                                isUsingDummy = false;
-                                addLog("初期ロボットモデルを非表示にしました。");
-                            }
-                            if (currentVrm) {
-                                scene.remove(currentVrm.scene);
-                                THREE_VRM.VRMUtils.deepDispose(currentVrm.scene);
-                            }
+                            THREE_VRM.VRM.from(gltf).then((vrm) => {
+                                if (dummyVrm && isUsingDummy) {
+                                    scene.remove(dummyVrm.scene);
+                                    isUsingDummy = false;
+                                    addLog("初期ロボットモデルを非表示にしました。");
+                                }
+                                if (currentVrm) {
+                                    scene.remove(currentVrm.scene);
+                                    currentVrm.dispose();
+                                }
 
-                            currentVrm = vrm;
-                            scene.add(vrm.scene);
-                            vrm.scene.rotation.y = Math.PI; 
+                                currentVrm = vrm;
+                                scene.add(vrm.scene);
+                                vrm.scene.rotation.y = Math.PI; 
 
-                            displayVrmMeta(gltf, vrm);
-                            
-                            const head = vrm.humanoid?.getBoneNode('head');
-                            if(head) {
-                                const headWorldPos = new THREE.Vector3();
-                                head.getWorldPosition(headWorldPos);
-                                camera.position.set(0.0, headWorldPos.y, 0.55);
-                                camera.lookAt(0.0, headWorldPos.y, 0.0);
-                            }
-                            resolve(vrm);
+                                displayVrmMeta(gltf, vrm);
+                                
+                                const head = vrm.humanoid?.getBoneNode(THREE_VRM.VRMHumanBoneName.Head);
+                                if(head) {
+                                    const headWorldPos = new THREE.Vector3();
+                                    head.getWorldPosition(headWorldPos);
+                                    camera.position.set(0.0, headWorldPos.y, 0.55);
+                                    camera.lookAt(0.0, headWorldPos.y, 0.0);
+                                }
+                                resolve(vrm);
+                            }).catch(innerVrmErr => {
+                                reject({ code: "ERR_VRM_PARSE", msg: "VRMへの変換に失敗しました。", detail: innerVrmErr.message });
+                            });
                         } catch (innerErr) {
                             reject({ code: "ERR_PARSING_CRASH", msg: "パース処理中にスクリプトがクラッシュしました。", detail: innerErr.message });
                         }
@@ -319,21 +314,18 @@
         }
 
         function displayVrmMeta(gltf, vrm) {
-            const isVrm0 = gltf.parser.json.extensions && gltf.parser.json.extensions.VRM;
-            vrmVersion = isVrm0 ? "0.0" : "1.0";
-            
             let name = "不明なアバター";
             let author = "不明な作者";
 
             if (vrm.meta) {
-                name = vrm.meta.avatarName || vrm.meta.title || "未設定";
-                author = vrm.meta.authors ? vrm.meta.authors.join(', ') : (vrm.meta.author || "未設定");
+                name = vrm.meta.title || "未設定";
+                author = vrm.meta.author || "未設定";
             }
 
             metaName.innerText = name;
             metaAuthor.innerText = author;
-            metaVersion.innerText = `VRM ${vrmVersion}`;
-            addLog(`アバター構築成功: ${name} (VRM ${vrmVersion})`);
+            metaVersion.innerText = `VRM 0.x`;
+            addLog(`アバター構築成功: ${name} (VRM 0.x)`);
         }
 
         async function initializeSystem() {
@@ -377,47 +369,35 @@
                 }
 
                 if (currentVrm) {
-                    const head = currentVrm.humanoid?.getBoneNode('head');
-                    const neck = currentVrm.humanoid?.getBoneNode('neck');
+                    const head = currentVrm.humanoid?.getBoneNode(THREE_VRM.VRMHumanBoneName.Head);
+                    const neck = currentVrm.humanoid?.getBoneNode(THREE_VRM.VRMHumanBoneName.Neck);
                     
                     if (head) head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
                     if (neck) neck.rotation.set(riggedFace.head.x * 0.3, riggedFace.head.y * 0.3, riggedFace.head.z * 0.3);
                     
-                    const target = currentVrm.expressionManager || currentVrm.blendShapeProxy;
+                    const target = currentVrm.blendShapeProxy;
                     if (target) {
                         if (currentExpressionMode === "auto") {
-                            if (vrmVersion === "1.0") {
-                                target.setValue('blinkLeft', riggedFace.eye.l);
-                                target.setValue('blinkRight', riggedFace.eye.r);
-                                target.setValue('i', riggedFace.mouth.shape.I);
-                                target.setValue('u', riggedFace.mouth.shape.U);
-                                target.setValue('a', riggedFace.mouth.shape.A);
-                                ['happy', 'angry', 'sad', 'relaxed', 'surprised'].forEach(exp => target.setValue(exp, 0));
-                            } else {
-                                target.setValue('blink_l', riggedFace.eye.l);
-                                target.setValue('blink_r', riggedFace.eye.r);
-                                target.setValue('i', riggedFace.mouth.shape.I);
-                                target.setValue('u', riggedFace.mouth.shape.U);
-                                target.setValue('a', riggedFace.mouth.shape.A);
-                                ['happy', 'angry', 'sad', 'fun', 'joy'].forEach(exp => target.setValue(exp, 0));
-                            }
+                            target.setValue(THREE_VRM.VRMBlendShapePresetName.BlinkL, riggedFace.eye.l);
+                            target.setValue(THREE_VRM.VRMBlendShapePresetName.BlinkR, riggedFace.eye.r);
+                            target.setValue(THREE_VRM.VRMBlendShapePresetName.I, riggedFace.mouth.shape.I);
+                            target.setValue(THREE_VRM.VRMBlendShapePresetName.U, riggedFace.mouth.shape.U);
+                            target.setValue(THREE_VRM.VRMBlendShapePresetName.A, riggedFace.mouth.shape.A);
+                            [THREE_VRM.VRMBlendShapePresetName.Angry, THREE_VRM.VRMBlendShapePresetName.Fun, THREE_VRM.VRMBlendShapePresetName.Joy, THREE_VRM.VRMBlendShapePresetName.Sorrow].forEach(exp => target.setValue(exp, 0));
                         } else {
                             const activeExp = currentExpressionMode;
-                            const activeExp0 = activeExp === 'relaxed' ? 'fun' : (activeExp === 'surprised' ? 'joy' : activeExp);
+                            let vrmPreset = THREE_VRM.VRMBlendShapePresetName.Joy;
+                            if (activeExp === 'happy') vrmPreset = THREE_VRM.VRMBlendShapePresetName.Joy;
+                            if (activeExp === 'angry') vrmPreset = THREE_VRM.VRMBlendShapePresetName.Angry;
+                            if (activeExp === 'sad') vrmPreset = THREE_VRM.VRMBlendShapePresetName.Sorrow;
+                            if (activeExp === 'relaxed') vrmPreset = THREE_VRM.VRMBlendShapePresetName.Fun;
+                            if (activeExp === 'surprised') vrmPreset = THREE_VRM.VRMBlendShapePresetName.Joy; 
                             
-                            if (vrmVersion === "1.0") {
-                                ['happy', 'angry', 'sad', 'relaxed', 'surprised'].forEach(exp => {
-                                    target.setValue(exp, exp === activeExp ? 1.0 : 0.0);
-                                });
-                                target.setValue('blinkLeft', riggedFace.eye.l);
-                                target.setValue('blinkRight', riggedFace.eye.r);
-                            } else {
-                                ['happy', 'angry', 'sad', 'fun', 'joy'].forEach(exp => {
-                                    target.setValue(exp, exp === activeExp0 ? 1.0 : 0.0);
-                                });
-                                target.setValue('blink_l', riggedFace.eye.l);
-                                target.setValue('blink_r', riggedFace.eye.r);
-                            }
+                            [THREE_VRM.VRMBlendShapePresetName.Angry, THREE_VRM.VRMBlendShapePresetName.Fun, THREE_VRM.VRMBlendShapePresetName.Joy, THREE_VRM.VRMBlendShapePresetName.Sorrow].forEach(exp => {
+                                target.setValue(exp, exp === vrmPreset ? 1.0 : 0.0);
+                            });
+                            target.setValue(THREE_VRM.VRMBlendShapePresetName.BlinkL, riggedFace.eye.l);
+                            target.setValue(THREE_VRM.VRMBlendShapePresetName.BlinkR, riggedFace.eye.r);
                         }
                     }
                 }
