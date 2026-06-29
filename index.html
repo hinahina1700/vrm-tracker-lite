@@ -8,12 +8,10 @@
         body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: sans-serif; color: white; user-select: none; }
         #canvas { width: 100vw; height: 100vh; display: block; }
         
-        /* カメラ＆描画用キャンバスのコンテナ */
         #video-container { position: fixed; bottom: 10px; right: 10px; width: 160px; height: 120px; border: 2px solid #555; border-radius: 4px; z-index: 10; background: #000; overflow: hidden; transition: opacity 0.2s; }
         #video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
         #overlay-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); pointer-events: none; }
         
-        /* タスクバー */
         #taskbar { position: fixed; top: 0; left: 0; width: 100vw; background: rgba(20, 20, 20, 0.9); backdrop-filter: blur(4px); border-bottom: 1px solid #333; z-index: 40; display: flex; flex-direction: column; padding: 5px 15px; box-sizing: border-box; font-size: 12px; gap: 5px; }
         .taskbar-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
         .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -27,25 +25,21 @@
         .status-dot.active { background: #00ffcc; box-shadow: 0 0 8px #00ffcc; }
         .status-dot.error { background: #ff3333; box-shadow: 0 0 8px #ff3333; }
 
-        /* ドロップ＆クリックエリア */
         #drop-zone { position: fixed; top: 80px; left: 10px; padding: 15px; background: rgba(0,0,0,0.7); color: white; border: 2px dashed #aaa; border-radius: 8px; font-size: 12px; z-index: 20; text-align: center; cursor: pointer; transition: all 0.2s; }
         #drop-zone:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
         #file-input { display: none; }
 
-        /* アバター概要パネル */
         #vrm-meta-panel { position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.75); padding: 12px; border-radius: 6px; font-size: 11px; border: 1px solid #444; min-width: 180px; z-index: 20; }
         #vrm-meta-panel h4 { margin: 0 0 6px 0; color: #00ffcc; font-size: 12px; border-bottom: 1px solid #444; padding-bottom: 4px; }
         .meta-line { margin: 3px 0; color: #ddd; }
         .meta-label { color: #aaa; }
 
-        /* ログパネル・コピーボタン付きのコンテナ */
         #log-container { position: fixed; bottom: 140px; right: 10px; width: 240px; z-index: 20; display: flex; flex-direction: column; gap: 4px; }
         #log-panel { height: 100px; background: rgba(0,0,0,0.8); border: 1px solid #444; border-radius: 4px; font-family: monospace; font-size: 10px; color: #00ffcc; padding: 5px; overflow-y: auto; box-sizing: border-box; }
         .log-entry { margin-bottom: 2px; line-height: 1.2; word-break: break-all; }
         .log-entry.err { color: #ff4444; }
         .log-btn-wrapper { display: flex; justify-content: flex-end; }
 
-        /* ローディング表示 */
         #loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 16px; background: rgba(0,0,0,0.85); padding: 25px 40px; border-radius: 8px; border: 1px solid #444; pointer-events: none; z-index: 30; text-align: center; transition: opacity 0.3s; }
         .spinner { border: 3px solid rgba(255,255,255,0.1); width: 24px; height: 24px; border-radius: 50%; border-left-color: #00ffcc; animation: spin 1s linear infinite; margin: 0 auto 10px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -139,9 +133,8 @@
         let isUsingDummy = true;
         let vrmVersion = "1.0"; 
         let currentExpressionMode = "auto";
-        let rawLogs = []; // コピー用のテキストログ配列
+        let rawLogs = [];
 
-        // --- システムログ記録関数 ---
         function addLog(text, isError = false) {
             const time = new Date().toLocaleTimeString();
             const logText = `[${time}] ${text}`;
@@ -155,7 +148,6 @@
             console.log(`[SYS_LOG] ${text}`);
         }
 
-        // ログコピーボタンの機能
         copyLogBtn.addEventListener('click', () => {
             if (rawLogs.length === 0) return;
             const fullLogText = rawLogs.join('\n');
@@ -174,7 +166,6 @@
 
         addLog("システムを起動しています...");
 
-        // --- Three.js 初期化 ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
         camera.position.set(0.0, 1.4, 0.55);
@@ -188,48 +179,40 @@
         scene.add(light);
         scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-        // --- 初期アバター（向きがはっきり分かるロボット）生成 ---
         function createDummyAvatar() {
             const group = new THREE.Group();
-            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x444446, roughness: 0.4, metalness: 0.5 }); // メタリックグレー
-            const faceMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, roughness: 0.2 }); // サイバーな発光風
-            const pointerMat = new THREE.MeshBasicMaterial({ color: 0xff3366 }); // 正面を指す赤いパーツ
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x444446, roughness: 0.4, metalness: 0.5 });
+            const faceMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, roughness: 0.2 });
+            const pointerMat = new THREE.MeshBasicMaterial({ color: 0xff3366 });
             
-            // 首
             const neckGeo = new THREE.CylinderGeometry(0.02, 0.025, 0.1);
             const neckMesh = new THREE.Mesh(neckGeo, bodyMat);
             neckMesh.position.y = 1.25;
             group.add(neckMesh);
 
-            // 頭部ベースグループ
             const headGroup = new THREE.Group();
             headGroup.position.y = 1.4; 
             
-            // サイバー頭蓋骨（箱型ロボ）
             const headGeo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
             const headMesh = new THREE.Mesh(headGeo, bodyMat);
             headGroup.add(headMesh);
 
-            // 正面バイザー（顔の向き判別用）
             const visorGeo = new THREE.BoxGeometry(0.12, 0.04, 0.02);
             const visorMesh = new THREE.Mesh(visorGeo, faceMat);
             visorMesh.position.set(0, 0.02, 0.065);
             headGroup.add(visorMesh);
 
-            // 正面突起（コーン：鼻の代わりに完全に前を向いている目印）
             const noseGeo = new THREE.ConeGeometry(0.015, 0.06, 4);
             const noseMesh = new THREE.Mesh(noseGeo, pointerMat);
             noseMesh.position.set(0, -0.02, 0.09);
-            noseMesh.rotation.x = Math.PI / 2; // 前に突き出す
+            noseMesh.rotation.x = Math.PI / 2;
             headGroup.add(noseMesh);
 
-            // 頭の上のアンテナ（左右回転のロールが分かりやすくなるパーツ）
             const antGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.06);
             const antMesh = new THREE.Mesh(antGeo, pointerMat);
             antMesh.position.set(0, 0.1, 0);
             headGroup.add(antMesh);
 
-            // 簡易インジケータ（口の代わりの板）
             const mouthGeo = new THREE.BoxGeometry(0.05, 0.008, 0.01);
             const mouthMesh = new THREE.Mesh(mouthGeo, faceMat);
             mouthMesh.position.set(0, -0.04, 0.07);
@@ -253,11 +236,8 @@
         }
         animate();
 
-        // --- 顔認識の描画関数（高精度瞳プロット対応） ---
         function drawFaceMesh(landmarks) {
             ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-            
-            // 頂点の総数によってMediaPipeのRefineMode（瞳拡張）が入っているかチェック
             const hasIris = landmarks.length > 468;
 
             for (let i = 0; i < landmarks.length; i++) {
@@ -265,61 +245,71 @@
                 const y = landmarks[i].y * overlayCanvas.height;
                 
                 if (hasIris && i >= 468) {
-                    ctx.fillStyle = "#ff3366"; // 瞳（黒目）のトラッキング点は赤色で細かく描写
+                    ctx.fillStyle = "#ff3366";
                     ctx.fillRect(x - 1.2, y - 1.2, 2.4, 2.4);
                 } else if (i === 1 || i === 13 || i === 14) {
-                    ctx.fillStyle = "#ffcc00"; // 唇の中心
+                    ctx.fillStyle = "#ffcc00";
                     ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
                 } else {
-                    ctx.fillStyle = "#00ffcc"; // 通常の輪郭（ミントグリーン）
+                    ctx.fillStyle = "#00ffcc";
                     ctx.fillRect(x - 0.8, y - 0.8, 1.6, 1.6);
                 }
             }
         }
 
-        // --- VRM読み込み処理 ---
+        // --- 強化されたVRM読み込み処理（安全弁付き） ---
         function loadVRM(url) {
             return new Promise((resolve, reject) => {
-                const loader = new THREE.GLTFLoader();
-                loader.crossOrigin = 'anonymous';
-                
-                loader.register((parser) => new THREE_VRM.VRM0CompatPlugin(parser));
-                loader.register((parser) => new THREE_VRM.VRMLoaderPlugin(parser));
-                
-                if (dummyVrm && isUsingDummy) {
-                    scene.remove(dummyVrm.scene);
-                    isUsingDummy = false;
-                    addLog("初期ロボットモデルをシーンから削除しました。");
-                }
-                if (currentVrm) {
-                    scene.remove(currentVrm.scene);
-                    THREE_VRM.VRMUtils.deepDispose(currentVrm.scene);
-                }
-
-                loader.load(url, (gltf) => {
-                    const vrm = gltf.userData.vrm;
-                    if (!vrm) {
-                        reject({ code: "ERR_NOT_VRM", msg: "VRMデータのパースに失敗しました。" });
-                        return;
-                    }
+                try {
+                    const loader = new THREE.GLTFLoader();
+                    loader.crossOrigin = 'anonymous';
                     
-                    currentVrm = vrm;
-                    scene.add(vrm.scene);
-                    vrm.scene.rotation.y = Math.PI; 
-
-                    displayVrmMeta(gltf, vrm);
+                    loader.register((parser) => new THREE_VRM.VRM0CompatPlugin(parser));
+                    loader.register((parser) => new THREE_VRM.VRMLoaderPlugin(parser));
                     
-                    const head = vrm.humanoid.getBoneNode('head');
-                    if(head) {
-                        const headWorldPos = new THREE.Vector3();
-                        head.getWorldPosition(headWorldPos);
-                        camera.position.set(0.0, headWorldPos.y, 0.55);
-                        camera.lookAt(0.0, headWorldPos.y, 0.0);
-                    }
-                    resolve(vrm);
-                }, undefined, (err) => {
-                    reject({ code: "ERR_LOAD_FAILED", msg: "GLTF形式の破損、またはロード失敗。", detail: err });
-                });
+                    loader.load(url, (gltf) => {
+                        try {
+                            // VRM 1.0 と 0.0 の両方のデータ展開パターンに対応
+                            const vrm = gltf.userData.vrm || gltf.userData.vrm1;
+                            if (!vrm) {
+                                reject({ code: "ERR_NOT_VRM", msg: "GLTFオブジェクト内にVRM拡張データ（vrm/vrm1）が見つかりません。" });
+                                return;
+                            }
+                            
+                            // 古いモデルのクリーンアップ（新しいアバターが確実に生成できる直前で削除）
+                            if (dummyVrm && isUsingDummy) {
+                                scene.remove(dummyVrm.scene);
+                                isUsingDummy = false;
+                                addLog("初期ロボットモデルを非表示にしました。");
+                            }
+                            if (currentVrm) {
+                                scene.remove(currentVrm.scene);
+                                THREE_VRM.VRMUtils.deepDispose(currentVrm.scene);
+                            }
+
+                            currentVrm = vrm;
+                            scene.add(vrm.scene);
+                            vrm.scene.rotation.y = Math.PI; 
+
+                            displayVrmMeta(gltf, vrm);
+                            
+                            const head = vrm.humanoid?.getBoneNode('head');
+                            if(head) {
+                                const headWorldPos = new THREE.Vector3();
+                                head.getWorldPosition(headWorldPos);
+                                camera.position.set(0.0, headWorldPos.y, 0.55);
+                                camera.lookAt(0.0, headWorldPos.y, 0.0);
+                            }
+                            resolve(vrm);
+                        } catch (innerErr) {
+                            reject({ code: "ERR_PARSING_CRASH", msg: "パース処理中にスクリプトがクラッシュしました。", detail: innerErr.message });
+                        }
+                    }, undefined, (err) => {
+                        reject({ code: "ERR_GLTF_LOAD", msg: "GLTFLoaderの読み込み自体が失敗しました。", detail: err?.message || err });
+                    });
+                } catch (setupErr) {
+                    reject({ code: "ERR_SETUP", msg: "ローダーの初期化に失敗しました。", detail: setupErr.message });
+                }
             });
         }
 
@@ -330,32 +320,26 @@
             let name = "不明なアバター";
             let author = "不明な作者";
 
-            if (vrmVersion === "1.0" && vrm.meta) {
-                name = vrm.meta.avatarName || "未設定";
-                author = vrm.meta.authors ? vrm.meta.authors.join(', ') : "未設定";
-            } else if (vrmVersion === "0.0" && gltf.parser.json.extensions.VRM.meta) {
-                const meta0 = gltf.parser.json.extensions.VRM.meta;
-                name = meta0.title || "未設定";
-                author = meta0.author || "未設定";
+            if (vrm.meta) {
+                name = vrm.meta.avatarName || vrm.meta.title || "未設定";
+                author = vrm.meta.authors ? vrm.meta.authors.join(', ') : (vrm.meta.author || "未設定");
             }
 
             metaName.innerText = name;
             metaAuthor.innerText = author;
             metaVersion.innerText = `VRM ${vrmVersion}`;
-            addLog(`アバター構築成功: ${name} (VRM ${vrmVersion}規格)`);
+            addLog(`アバター構築成功: ${name} (VRM ${vrmVersion})`);
         }
 
-        // --- メインAI・トラッキングシステム初期化 ---
         async function initializeSystem() {
             const faceMesh = new FaceMesh({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
             });
 
-            // 【精度向上】refineLandmarksをtrueにして目の虹彩・黒目まで細かくキャプチャする
             faceMesh.setOptions({
                 maxNumFaces: 1,
                 refineLandmarks: true, 
-                minDetectionConfidence: 0.6, // 誤検出を減らすため閾値を微調整
+                minDetectionConfidence: 0.6, 
                 minTrackingConfidence: 0.6
             });
 
@@ -372,32 +356,24 @@
                 }
                 
                 const landmarks = results.multiFaceLandmarks[0];
-                
-                // 点々の描画
                 drawFaceMesh(landmarks);
 
                 const riggedFace = Kalidokit.Face.solve(results.multiFaceLandmarks, { runtime: "mediapipe", video: videoElement });
                 if (!riggedFace) return;
 
-                // ロボットモデルの駆動
                 if (isUsingDummy && dummyVrm) {
                     dummyVrm.head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
                     dummyVrm.neck.rotation.set(riggedFace.head.x * 0.3, riggedFace.head.y * 0.3, riggedFace.head.z * 0.3);
-                    
-                    // まばたき時にバイザーの色やスケールを変化させてフィードバック
                     const eyeOpen = 1 - (riggedFace.eye.l + riggedFace.eye.r) / 2;
                     dummyVrm.visor.scale.y = Math.max(0.1, eyeOpen);
-                    
-                    // 口パクでインジケータを拡張
                     const openRatio = riggedFace.mouth.shape.A * 3 + riggedFace.mouth.shape.I * 1;
                     dummyVrm.mouth.scale.x = Math.max(1, 1 + openRatio * 2);
                     return;
                 }
 
-                // ユーザーVRMの駆動
                 if (currentVrm) {
-                    const head = currentVrm.humanoid.getBoneNode('head');
-                    const neck = currentVrm.humanoid.getBoneNode('neck');
+                    const head = currentVrm.humanoid?.getBoneNode('head');
+                    const neck = currentVrm.humanoid?.getBoneNode('neck');
                     
                     if (head) head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
                     if (neck) neck.rotation.set(riggedFace.head.x * 0.3, riggedFace.head.y * 0.3, riggedFace.head.z * 0.3);
@@ -473,7 +449,6 @@
 
         initializeSystem();
 
-        // --- 表情切り替え処理 ---
         function changeExpressionMode(mode) {
             if (isUsingDummy) {
                 addLog("初期ロボット時は表情手動固定コマンドをバイパスします。");
@@ -516,7 +491,6 @@
             }
         });
 
-        // UI切り替え
         const toggleVideoBtn = document.getElementById('toggle-video');
         toggleVideoBtn.addEventListener('click', () => {
             const container = document.getElementById('video-container');
@@ -536,7 +510,6 @@
             document.body.style.background = e.target.value;
         });
 
-        // --- ドロップ・ファイル読み込み ---
         dropZone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => processFile(e.target.files[0]));
 
@@ -583,10 +556,11 @@
                 }).catch(err => {
                     console.error(err);
                     const code = err.code || "ERR_UNKNOWN";
-                    const msg = err.msg || "VRMアバターの構築中に未知のエラーが発生しました。";
+                    const msg = err.msg || "未知のエラー";
+                    const detail = err.detail ? ` (${err.detail})` : "";
                     setSystemStatus("error", `${code}: アバター生成失敗`);
-                    addLog(`構築失敗: ${code} - ${msg}`, true);
-                    alert(`[エラーコード: ${code}]\n${msg}`);
+                    addLog(`構築失敗: ${code} - ${msg}${detail}`, true);
+                    alert(`[エラーコード: ${code}]\n${msg}${detail}`);
                     hideLoading();
                 });
             };
