@@ -287,7 +287,6 @@
                     const target = currentVrm.blendShapeProxy;
                     if (target) {
                         if (currentExpressionMode === "auto") {
-                            // ★目のパチパチ反転＆感度バグを完全に補正
                             const blinkL = Math.max(0, Math.min(1, 1.0 - (riggedFace.eye.l * 1.5)));
                             const blinkR = Math.max(0, Math.min(1, 1.0 - (riggedFace.eye.r * 1.5)));
                             
@@ -391,7 +390,7 @@
             loadingElement.style.display = 'flex';
             
             updateProgress(20, "顔トラッカーの読み込み...");
-            faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
+            faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}` });
             faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
             faceMesh.onResults((results) => {
                 latestFaceLandmarks = results.multiFaceLandmarks ? results.multiFaceLandmarks[0] : null;
@@ -403,23 +402,23 @@
             });
 
             updateProgress(40, "体トラッカーの読み込み...");
-            // ★【修正】WASM読み込み先を正しいパス (@mediapipe/pose) に完全修正
-            poseEstimator = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+            // ★【修正】Poseインスタンスの内部ダウンロード先も完全に個別ルートへ束縛
+            poseEstimator = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/${file}` });
             poseEstimator.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
             poseEstimator.onResults((results) => {
                 latestPoseLandmarks = results.poseLandmarks || null;
             });
 
             updateProgress(60, "手トラッカーの読み込み...");
-            // ★【復活】手のトラッキングモジュールを追加
-            handTracker = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+            // ★【修正】Handsインスタンスの内部ダウンロード先も完全に個別ルートへ束縛
+            handTracker = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}` });
             handTracker.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
             handTracker.onResults((results) => {
                 latestLeftHandLandmarks = null;
                 latestRightHandLandmarks = null;
                 if (results.multiHandLandmarks && results.multiHandedness) {
                     results.multiHandLandmarks.forEach((landmarks, idx) => {
-                        const label = results.multiHandedness[idx].label; // "Left" or "Right"
+                        const label = results.multiHandedness[idx].label;
                         if (label === "Left") latestLeftHandLandmarks = landmarks;
                         if (label === "Right") latestRightHandLandmarks = landmarks;
                     });
@@ -537,7 +536,6 @@
                 e.target.classList.add('active');
                 trackingTarget = e.target.getAttribute('data-target');
                 
-                // モード変更時にトラッカーの負荷を最適化するためカメラを再起動
                 const activeDevice = videoDevices[currentDeviceIndex];
                 await startCameraStream(activeDevice?.deviceId);
             }
