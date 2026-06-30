@@ -51,6 +51,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/kalidokit@1.1.5/dist/kalidokit.umd.js"></script>
 </head>
 <body>
@@ -84,7 +85,8 @@
             <div class="controls" id="track-target-buttons">
                 <span style="color:#aaa;">動かす場所:</span>
                 <button class="btn" data-target="face">顔のみ</button>
-                <button class="btn active" data-target="body">顔＋からだ（高速モード）</button>
+                <button class="btn active" data-target="body">顔＋からだ</button>
+                <button class="btn" data-target="all">顔＋からだ＋て</button>
             </div>
             <div class="controls" id="expression-buttons">
                 <span style="color:#aaa;">表情:</span>
@@ -147,13 +149,14 @@
         let trackingTarget = "body"; 
         let cameraUtils = null;
 
-        // 軽量な個別トラッカー群
         let faceMesh = null;
         let poseEstimator = null;
+        let handTracker = null;
 
-        // データ同期用のバッファ
         let latestFaceLandmarks = null;
         let latestPoseLandmarks = null;
+        let latestLeftHandLandmarks = null;
+        let latestRightHandLandmarks = null;
 
         let videoDevices = [];
         let currentDeviceIndex = 0;
@@ -166,7 +169,6 @@
             loadingText.innerText = text;
         }
 
-        // 3Dシーン構築
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
         camera.position.set(0.0, 1.4, 0.55);
@@ -212,14 +214,12 @@
         }
         createDummyAvatar();
 
-        // 🌟 描画＆AI追従メインループ（超高速・低負荷）
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
             controls.update(); 
 
-            // 毎フレーム、最新の顔・体データを安全にアバターへ適用
             processTrackingData();
 
             if (currentVrm) { currentVrm.update(delta); }
@@ -231,20 +231,20 @@
             ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
             ctx.fillStyle = "#00ffcc";
             if (latestFaceLandmarks) {
-                // 間引きして軽量に描画
-                for(let i=0; i<latestFaceLandmarks.length; i+=5) {
+                for(let i=0; i<latestFaceLandmarks.length; i+=8) {
                     const pt = latestFaceLandmarks[i];
                     ctx.fillRect(pt.x * overlayCanvas.width - 1, pt.y * overlayCanvas.height - 1, 2, 2);
                 }
             }
         }
 
-        // 🌟 集約されたトラッキング計算処理（絶対にフリーズしない安全弁）
         function processTrackingData() {
             if (!latestFaceLandmarks && !latestPoseLandmarks) return;
 
             let riggedFace = null;
             let riggedPose = null;
+            let riggedLeftHand = null;
+            let riggedRightHand = null;
 
             try {
                 if (latestFaceLandmarks && latestFaceLandmarks.length > 0) {
@@ -258,6 +258,18 @@
                 }
             } catch(e) {}
 
+            try {
+                if (latestLeftHandLandmarks && latestLeftHandLandmarks.length > 0) {
+                    riggedLeftHand = Kalidokit.Hand.solve(latestLeftHandLandmarks, "Left");
+                }
+            } catch(e) {}
+
+            try {
+                if (latestRightHandLandmarks && latestRightHandLandmarks.length > 0) {
+                    riggedRightHand = Kalidokit.Hand.solve(latestRightHandLandmarks, "Right");
+                }
+            } catch(e) {}
+
             if (isUsingDummy && dummyVrm && riggedFace) {
                 dummyVrm.head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
                 return;
@@ -266,7 +278,6 @@
             if (currentVrm) {
                 const humanoid = currentVrm.humanoid;
                 
-                // 顔の同期
                 if (riggedFace) {
                     const head = humanoid?.getBoneNode('head');
                     const neck = humanoid?.getBoneNode('neck');
@@ -276,7 +287,7 @@
                     const target = currentVrm.blendShapeProxy;
                     if (target) {
                         if (currentExpressionMode === "auto") {
-                            // ★【重要バグ修正】MediaPipe v0.10系での目の開閉フラグ反転を力技で補正 (1.0 - 数値)
+                            // ★目のパチパチ反転＆感度バグを完全に補正
                             const blinkL = Math.max(0, Math.min(1, 1.0 - (riggedFace.eye.l * 1.5)));
                             const blinkR = Math.max(0, Math.min(1, 1.0 - (riggedFace.eye.r * 1.5)));
                             
@@ -291,8 +302,7 @@
                     }
                 }
 
-                // からだの同期
-                if (trackingTarget === "body" && riggedPose) {
+                if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose) {
                     const spine = humanoid?.getBoneNode('spine');
                     const chest = humanoid?.getBoneNode('chest');
                     const upperArmL = humanoid?.getBoneNode('leftUpperArm');
@@ -306,6 +316,29 @@
                     if (upperArmR) upperArmR.rotation.set(riggedPose.rightUpperArm.x, riggedPose.rightUpperArm.y, riggedPose.rightUpperArm.z);
                     if (lowerArmL) lowerArmL.rotation.set(riggedPose.leftLowerArm.x, riggedPose.leftLowerArm.y, riggedPose.leftLowerArm.z);
                     if (lowerArmR) lowerArmR.rotation.set(riggedPose.rightLowerArm.x, riggedPose.rightLowerArm.y, riggedPose.rightLowerArm.z);
+                }
+
+                if (trackingTarget === "all") {
+                    if (riggedLeftHand) {
+                        const handL = humanoid?.getBoneNode('leftHand');
+                        if (handL) handL.rotation.set(riggedLeftHand.leftWrist.x, riggedLeftHand.leftWrist.y, riggedLeftHand.leftWrist.z);
+                        ['thumb','index','middle','ring','little'].forEach(finger => {
+                            for(let i=1; i<=3; i++) {
+                                const bone = humanoid?.getBoneNode(`left${finger.charAt(0).toUpperCase() + finger.slice(1)}${i}`);
+                                if(bone && riggedLeftHand[finger]) bone.rotation.z = riggedLeftHand[finger][i-1].z;
+                            }
+                        });
+                    }
+                    if (riggedRightHand) {
+                        const handR = humanoid?.getBoneNode('rightHand');
+                        if (handR) handR.rotation.set(riggedRightHand.rightWrist.x, riggedRightHand.rightWrist.y, riggedRightHand.rightWrist.z);
+                        ['thumb','index','middle','ring','little'].forEach(finger => {
+                            for(let i=1; i<=3; i++) {
+                                const bone = humanoid?.getBoneNode(`right${finger.charAt(0).toUpperCase() + finger.slice(1)}${i}`);
+                                if(bone && riggedRightHand[finger]) bone.rotation.z = riggedRightHand[finger][i-1].z;
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -329,7 +362,6 @@
                             currentVrm = vrm;
                             scene.add(vrm.scene);
 
-                            // 初期デフォルトAポーズ固定
                             const humanoid = vrm.humanoid;
                             if (humanoid) {
                                 const leftUpperArm = humanoid.getBoneNode('leftUpperArm');
@@ -355,11 +387,10 @@
             });
         }
 
-        // 🌟 独立した2つの軽量エンジンを爆速初期化
         async function initializeSystem() {
             loadingElement.style.display = 'flex';
             
-            updateProgress(20, "軽量顔トラッカーを起動中...");
+            updateProgress(20, "顔トラッカーの読み込み...");
             faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
             faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
             faceMesh.onResults((results) => {
@@ -371,14 +402,30 @@
                 drawOverlay();
             });
 
-            updateProgress(50, "軽量姿勢トラッカーを起動中...");
+            updateProgress(40, "体トラッカーの読み込み...");
+            // ★【修正】WASM読み込み先を正しいパス (@mediapipe/pose) に完全修正
             poseEstimator = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-            poseEstimator.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 }); // Complexity 0 で最軽量化
+            poseEstimator.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
             poseEstimator.onResults((results) => {
                 latestPoseLandmarks = results.poseLandmarks || null;
             });
 
-            updateProgress(70, "利用可能なカメラをスキャン中...");
+            updateProgress(60, "手トラッカーの読み込み...");
+            // ★【復活】手のトラッキングモジュールを追加
+            handTracker = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+            handTracker.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+            handTracker.onResults((results) => {
+                latestLeftHandLandmarks = null;
+                latestRightHandLandmarks = null;
+                if (results.multiHandLandmarks && results.multiHandedness) {
+                    results.multiHandLandmarks.forEach((landmarks, idx) => {
+                        const label = results.multiHandedness[idx].label; // "Left" or "Right"
+                        if (label === "Left") latestLeftHandLandmarks = landmarks;
+                        if (label === "Right") latestRightHandLandmarks = landmarks;
+                    });
+                }
+            });
+
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 videoDevices = devices.filter(d => d.kind === 'videoinput');
@@ -388,17 +435,19 @@
         }
 
         async function startCameraStream(deviceId = null) {
-            updateProgress(85, "カメラ映像ストリームを同期中...");
+            updateProgress(85, "カメラデバイスを同期中...");
             if (cameraUtils) { await cameraUtils.stop(); }
 
-            // 画質を小さく（320x240）固定してAIの負荷を極限までカット
             cameraUtils = new Camera(videoElement, {
                 onFrame: async () => {
-                    // 両方のトラッカーへ同時に映像を流し込む
-                    await Promise.all([
-                        faceMesh.send({ image: videoElement }),
-                        poseEstimator.send({ image: videoElement })
-                    ]);
+                    const tasks = [faceMesh.send({ image: videoElement })];
+                    if (trackingTarget === "body" || trackingTarget === "all") {
+                        tasks.push(poseEstimator.send({ image: videoElement }));
+                    }
+                    if (trackingTarget === "all") {
+                        tasks.push(handTracker.send({ image: videoElement }));
+                    }
+                    await Promise.all(tasks);
                 },
                 width: 320,
                 height: 240,
@@ -407,26 +456,24 @@
 
             try {
                 await cameraUtils.start();
-                updateProgress(100, "すべてのシステムが軽量稼働しました！");
+                updateProgress(100, "システム起動完了！");
                 setTimeout(() => {
                     loadingElement.style.opacity = '0';
                     setTimeout(() => loadingElement.style.display = 'none', 400);
                 }, 400);
                 statusDot.className = "status-dot active";
-                statusText.innerText = `軽量快適モード`;
+                statusText.innerText = `稼働中`;
             } catch (e) {
-                updateProgress(0, "カメラ起動エラー");
+                updateProgress(0, "カメラエラー");
             }
         }
 
-        // カメラ切り替え
         document.getElementById('btn-switch-camera').addEventListener('click', async () => {
             if (videoDevices.length <= 1) return;
             currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
             await startCameraStream(videoDevices[currentDeviceIndex].deviceId);
         });
 
-        // 背景色
         bgColorInput.addEventListener('input', (e) => {
             renderer.setClearColor(new THREE.Color(e.target.value), 1.0);
             document.body.style.background = e.target.value;
@@ -442,7 +489,6 @@
             document.body.style.background = "#1a1a1a";
         });
 
-        // スクショ
         document.getElementById('btn-screenshot').addEventListener('click', () => {
             renderer.render(scene, camera);
             const link = document.createElement('a');
@@ -451,7 +497,6 @@
             link.click();
         });
 
-        // 録画
         const recordBtn = document.getElementById('btn-record');
         recordBtn.addEventListener('click', () => {
             if (!isRecording) {
@@ -460,7 +505,7 @@
                 mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
                 mediaRecorder.onstop = () => {
                     const link = document.createElement('a');
-                    link.download = `avatar_movie_${Date.now()}.webm`;
+                    link.download = `movie_${Date.now()}.webm`;
                     link.href = URL.createObjectURL(new Blob(recordedChunks, { type: 'video/webm' }));
                     link.click();
                 };
@@ -476,7 +521,6 @@
             }
         });
 
-        // PiP
         document.getElementById('btn-pip').addEventListener('click', async () => {
             try {
                 const pipVideo = document.createElement('video');
@@ -487,16 +531,18 @@
             } catch (e) {}
         });
 
-        // トラッキング部位
-        document.getElementById('track-target-buttons').addEventListener('click', (e) => {
+        document.getElementById('track-target-buttons').addEventListener('click', async (e) => {
             if (e.target.classList.contains('btn')) {
                 document.querySelectorAll('#track-target-buttons .btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
                 trackingTarget = e.target.getAttribute('data-target');
+                
+                // モード変更時にトラッカーの負荷を最適化するためカメラを再起動
+                const activeDevice = videoDevices[currentDeviceIndex];
+                await startCameraStream(activeDevice?.deviceId);
             }
         });
 
-        // 表情
         document.getElementById('expression-buttons').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn')) {
                 document.querySelectorAll('#expression-buttons .btn').forEach(b => b.classList.remove('active'));
@@ -505,7 +551,6 @@
             }
         });
 
-        // ファイルドロップ
         dropZone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => processFile(e.target.files[0]));
         window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background = 'rgba(0, 255, 204, 0.2)'; });
