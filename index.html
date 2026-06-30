@@ -25,7 +25,9 @@
         .status-dot { width: 8px; height: 8px; background: #ff4444; border-radius: 50%; display: inline-block; }
         .status-dot.active { background: #00ffcc; box-shadow: 0 0 8px #00ffcc; }
 
-        #drop-zone { position: fixed; top: 110px; left: 10px; padding: 15px; background: rgba(0,0,0,0.7); color: white; border: 2px dashed #aaa; border-radius: 8px; font-size: 12px; z-index: 20; text-align: center; cursor: pointer; transition: all 0.2s; display: none; } /* 不要なドロップゾーンは非表示に */
+        /* アップロードゾーンを復活 */
+        #drop-zone { position: fixed; top: 110px; left: 10px; padding: 15px; background: rgba(0,0,0,0.7); color: white; border: 2px dashed #aaa; border-radius: 8px; font-size: 12px; z-index: 20; text-align: center; cursor: pointer; transition: all 0.2s; display: block; }
+        #drop-zone:hover { border-color: #00ffcc; background: rgba(0,255,204,0.1); }
         #file-input { display: none; }
 
         #vrm-meta-panel { position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.75); padding: 12px; border-radius: 6px; font-size: 11px; border: 1px solid #444; min-width: 180px; z-index: 20; }
@@ -85,8 +87,11 @@
                 <button class="btn active" data-target="body">顔＋からだ</button>
                 <button class="btn" data-target="all">顔＋からだ＋て</button>
             </div>
-            <div class="controls" id="expression-buttons" style="display:none;"> <span style="color:#aaa;">表情:</span>
+            <div class="controls" id="expression-buttons">
+                <span style="color:#aaa;">表情:</span>
                 <button class="btn active" data-exp="auto">自動</button>
+                <button class="btn" data-exp="surprised">驚き</button>
+                <button class="btn" data-exp="angry">怒り</button>
             </div>
             <div class="controls">
                 <span style="color:#aaa;">背景色:</span>
@@ -99,8 +104,13 @@
         </div>
     </div>
 
+    <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+        ここにVRMファイルをドロップ<br>またはクリックして選択
+        <input type="file" id="file-input" accept=".vrm">
+    </div>
+
     <div id="vrm-meta-panel">
-        <h4>公式キャラクター</h4>
+        <h4>キャラクター情報</h4>
         <div class="meta-line">名前: <span id="meta-name">ライト・ロボ (Lite-Robo)</span></div>
         <div class="meta-line">開発: <span id="meta-author">vrm-tracker-lite</span></div>
     </div>
@@ -126,10 +136,13 @@
         const statusText = document.getElementById('status-text');
         const bgColorInput = document.getElementById('bg-color-input');
 
+        let currentVrm = null;
+        let isOfficialAvatar = true; // 現在公式キャラかどうか
+        let currentExpression = "auto";
+
         let cameraUtils = null;
         let holistic = null;
 
-        // 最新のランドマーク保持用
         let latestFaceLandmarks = null;
         let latestPoseLandmarks = null;
         let latestLeftHandLandmarks = null;
@@ -150,7 +163,9 @@
         // --- Three.js 初期化 ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
-        camera.position.set(0.0, 1.4, 0.6);
+        
+        // ★【修正】初期位置を顔と上半身がきれいに収まる位置に調整
+        camera.position.set(0.0, 1.25, 1.2); 
 
         const initBgColor = new THREE.Color(bgColorInput.value);
         const renderer = new THREE.WebGLRenderer({ canvas: canvasElement, antialias: true, alpha: false, preserveDrawingBuffer: true });
@@ -165,67 +180,62 @@
         scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.target.set(0.0, 1.3, 0.0);
+        // ★【修正】注視点を上半身（胸・顔付近）にセット
+        controls.target.set(0.0, 1.15, 0.0); 
         controls.enableDamping = true;
         controls.dampingFactor = 0.1;
         controls.screenSpacePanning = true; 
 
         // --- 🤖 公式キャラクター「ライト・ロボ」のボーンシステム定義 🤖 ---
         const robotNodes = {};
+        let officialAvatarGroup = null;
+
         function createOfficialAvatar() {
-            const group = new THREE.Group();
+            if (officialAvatarGroup) scene.remove(officialAvatarGroup);
+            
+            officialAvatarGroup = new THREE.Group();
             const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3c, roughness: 0.5 });
             const jointMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.7 });
             const visorMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, emissive: 0x004433 });
             const handMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc });
 
-            // 骨格ベース（腰から上）
             const spineNode = new THREE.Group(); spineNode.position.set(0, 0.9, 0); 
             const chestNode = new THREE.Group(); chestNode.position.set(0, 0.2, 0);
             const neckNode = new THREE.Group();  neckNode.position.set(0, 0.15, 0);
             const headNode = new THREE.Group();  headNode.position.set(0, 0.08, 0);
 
-            // 左腕
             const leftUpperArm = new THREE.Group(); leftUpperArm.position.set(0.16, 0.12, 0);
             const leftLowerArm = new THREE.Group(); leftLowerArm.position.set(0.14, 0, 0);
             const leftHand = new THREE.Group();     leftHand.position.set(0.12, 0, 0);
 
-            // 右腕
             const rightUpperArm = new THREE.Group(); rightUpperArm.position.set(-0.16, 0.12, 0);
             const rightLowerArm = new THREE.Group(); rightLowerArm.position.set(-0.14, 0, 0);
             const rightHand = new THREE.Group();     rightHand.position.set(-0.12, 0, 0);
 
-            // --- メッシュの配置 ---
-            // 下半身・スタンドベース
             const baseMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.08, 0.9, 16), bodyMat);
             baseMesh.position.y = 0.45;
-            group.add(baseMesh);
+            officialAvatarGroup.add(baseMesh);
 
-            // お腹(Spine)
             const spineMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.15, 16), jointMat);
             spineMesh.position.y = 0.075;
             spineNode.add(spineMesh);
 
-            // 胸(Chest)
             const chestMesh = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 0.14), bodyMat);
             chestMesh.position.y = 0.09;
             chestNode.add(chestMesh);
 
-            // 首
             const neckMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.022, 0.08, 12), jointMat);
             neckMesh.position.y = 0.04;
             neckNode.add(neckMesh);
 
-            // 頭(Head)
             const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.14, 0.14), bodyMat);
             headMesh.position.y = 0.07;
             headNode.add(headMesh);
-            // サンバイザー（目）
+            
             const visor = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.035, 0.02), visorMat);
             visor.position.set(0, 0.07, 0.065);
             headNode.add(visor);
 
-            // 左腕ビジュアル
             const luaMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.02, 0.14, 12), bodyMat);
             luaMesh.rotation.z = -Math.PI / 2; luaMesh.position.x = 0.07;
             leftUpperArm.add(luaMesh);
@@ -235,7 +245,6 @@
             const lhMesh = new THREE.Mesh(new THREE.SphereGeometry(0.022, 12, 12), handMat);
             leftHand.add(lhMesh);
 
-            // 右腕ビジュアル
             const ruaMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.02, 0.14, 12), bodyMat);
             ruaMesh.rotation.z = Math.PI / 2; ruaMesh.position.x = -0.07;
             rightUpperArm.add(ruaMesh);
@@ -245,27 +254,22 @@
             const rhMesh = new THREE.Mesh(new THREE.SphereGeometry(0.022, 12, 12), handMat);
             rightHand.add(rhMesh);
 
-            // ツリー構造の結合
-            group.add(spineNode);
+            officialAvatarGroup.add(spineNode);
             spineNode.add(chestNode);
             chestNode.add(neckNode);
             neckNode.add(headNode);
-
             chestNode.add(leftUpperArm);
             leftUpperArm.add(leftLowerArm);
             leftLowerArm.add(leftHand);
-
             chestNode.add(rightUpperArm);
             rightUpperArm.add(rightLowerArm);
             rightLowerArm.add(rightHand);
 
-            scene.add(group);
+            scene.add(officialAvatarGroup);
 
-            // 初期ポーズ調整 (Aポーズ)
             leftUpperArm.rotation.z = -0.4;
             rightUpperArm.rotation.z = 0.4;
 
-            // トラッカー用にグローバル参照として保存
             robotNodes.spine = spineNode;
             robotNodes.chest = chestNode;
             robotNodes.neck = neckNode;
@@ -276,7 +280,77 @@
             robotNodes.rightUpperArm = rightUpperArm;
             robotNodes.rightLowerArm = rightLowerArm;
             robotNodes.rightHand = rightHand;
+            
+            isOfficialAvatar = true;
+            document.getElementById('meta-name').innerText = "ライト・ロボ (Lite-Robo)";
+            document.getElementById('meta-author').innerText = "vrm-tracker-lite";
         }
+
+        // --- VRMファイルのロード処理（復活） ---
+        function loadVRM(url) {
+            updateProgress(20, "VRMデータの解析中...");
+            if (currentVrm) {
+                scene.remove(currentVrm.scene);
+                THREE.VRMUtils.deepDispose(currentVrm.scene);
+            }
+            if (officialAvatarGroup) {
+                scene.remove(officialAvatarGroup);
+            }
+
+            const loader = new THREE.GLTFLoader();
+            loader.load(url, (gltf) => {
+                THREE.VRM.from(gltf).then((vrm) => {
+                    currentVrm = vrm;
+                    scene.add(vrm.scene);
+                    vrm.scene.rotation.y = Math.PI; // 正面を向ける
+                    isOfficialAvatar = false;
+
+                    // メタデータの表示
+                    const meta = vrm.meta;
+                    document.getElementById('meta-name').innerText = meta.title || "不明なアバター";
+                    document.getElementById('meta-author').innerText = meta.author || "不明な制作者";
+
+                    // Aポーズ初期化
+                    if (vrm.humanoid) {
+                        vrm.humanoid.getBoneNode(THREE.VRMHumanoidBoneName.LeftUpperArm).rotation.z = -0.4;
+                        vrm.humanoid.getBoneNode(THREE.VRMHumanoidBoneName.RightUpperArm).rotation.z = 0.4;
+                    }
+
+                    loadingElement.style.opacity = '0';
+                    setTimeout(() => loadingElement.style.display = 'none', 400);
+                });
+            }, (progress) => {
+                const pct = Math.round((progress.loaded / progress.total) * 100);
+                updateProgress(50 + Math.round(pct/2), `アバター読み込み中... (${pct}%)`);
+            }, (error) => {
+                alert("VRMの読み込みに失敗しました。");
+                createOfficialAvatar();
+                loadingElement.style.display = 'none';
+            });
+        }
+
+        // ドロップ＆ファイル選択のイベントリスナー
+        const dropZone = document.getElementById('drop-zone');
+        window.addEventListener('dragover', (e) => e.preventDefault());
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].name.endsWith('.vrm')) {
+                loadingElement.style.display = 'flex';
+                const blob = new Blob([files[0]], { type: "application/octet-stream" });
+                loadVRM(URL.createObjectURL(blob));
+            }
+        });
+        document.getElementById('file-input').addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length > 0) {
+                loadingElement.style.display = 'flex';
+                const blob = new Blob([files[0]], { type: "application/octet-stream" });
+                loadVRM(URL.createObjectURL(blob));
+            }
+        });
+
+        // デフォルトで公式アバターを生成
         createOfficialAvatar();
 
         function animate() {
@@ -287,7 +361,6 @@
         }
         animate();
 
-        // カメラ映像に重ねるトラッキング用ドット描画
         function drawOverlay() {
             ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
             ctx.fillStyle = "#00ffcc";
@@ -299,7 +372,6 @@
             }
         }
 
-        // Kalidokitトラッキング計算およびライト・ロボへの骨格適用
         function processTrackingData() {
             if (!latestFaceLandmarks && !latestPoseLandmarks) return;
 
@@ -308,10 +380,9 @@
             let riggedLeftHand = null;
             let riggedRightHand = null;
 
-            // 1. 顔のトラッキング（上下反転バグを回避するため、Y軸座標変換を注入）
+            // 1. 顔のトラッキング
             try {
                 if (latestFaceLandmarks && latestFaceLandmarks.length > 0) {
-                    // ★【修正】Kalidokit内部の計算に合わせるため、顔のY軸反転を補正
                     const adjustedFace = latestFaceLandmarks.map(pt => ({ x: pt.x, y: 1.0 - pt.y, z: pt.z }));
                     riggedFace = Kalidokit.Face.solve(adjustedFace, { runtime: "mediapipe", video: videoElement });
                 }
@@ -340,50 +411,81 @@
                 }
             } catch(e) {}
 
-            // --- ライト・ロボの関節に回転情報を流し込む ---
-            if (riggedFace) {
-                // 顔の向きをそのまま適用（上下のガタつきを滑らかにするため制限を少しかける）
-                robotNodes.head.rotation.set(-riggedFace.head.x * 0.8, -riggedFace.head.y, -riggedFace.head.z);
-                robotNodes.neck.rotation.set(-riggedFace.head.x * 0.2, -riggedFace.head.y * 0.2, 0);
-            }
-
-            if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose) {
-                // 背骨、胸の傾き
-                robotNodes.spine.rotation.set(-riggedPose.spine.x, -riggedPose.spine.y, -riggedPose.spine.z);
+            // 各アバターへのポーズ流し込み
+            if (isOfficialAvatar) {
+                // 公式ロボットの場合
+                if (riggedFace) {
+                    robotNodes.head.rotation.set(-riggedFace.head.x * 0.8, -riggedFace.head.y, -riggedFace.head.z);
+                    robotNodes.neck.rotation.set(-riggedFace.head.x * 0.2, -riggedFace.head.y * 0.2, 0);
+                }
+                if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose) {
+                    robotNodes.spine.rotation.set(-riggedPose.spine.x, -riggedPose.spine.y, -riggedPose.spine.z);
+                    if (riggedPose.leftUpperArm) robotNodes.leftUpperArm.rotation.set(riggedPose.leftUpperArm.x, riggedPose.leftUpperArm.y, riggedPose.leftUpperArm.z - 0.4);
+                    if (riggedPose.rightUpperArm) robotNodes.rightUpperArm.rotation.set(riggedPose.rightUpperArm.x, riggedPose.rightUpperArm.y, riggedPose.rightUpperArm.z + 0.4);
+                    if (riggedPose.leftLowerArm) robotNodes.leftLowerArm.rotation.set(riggedPose.leftLowerArm.x, riggedPose.leftLowerArm.y, riggedPose.leftLowerArm.z);
+                    if (riggedPose.rightLowerArm) robotNodes.rightLowerArm.rotation.set(riggedPose.rightLowerArm.x, riggedPose.rightLowerArm.y, riggedPose.rightLowerArm.z);
+                }
+                if (trackingTarget === "all") {
+                    if (riggedLeftHand && riggedLeftHand.leftWrist) robotNodes.leftHand.rotation.set(riggedLeftHand.leftWrist.x, riggedLeftHand.leftWrist.y, riggedLeftHand.leftWrist.z);
+                    if (riggedRightHand && riggedRightHand.rightWrist) robotNodes.rightHand.rotation.set(riggedRightHand.rightWrist.x, riggedRightHand.rightWrist.y, riggedRightHand.rightWrist.z);
+                }
+            } else if (currentVrm && currentVrm.humanoid) {
+                // アップロードされた通常VRMアバターの場合
+                const h = currentVrm.humanoid;
                 
-                // 腕の動き（肩から肘まで）
-                if (riggedPose.leftUpperArm) robotNodes.leftUpperArm.rotation.set(riggedPose.leftUpperArm.x, riggedPose.leftUpperArm.y, riggedPose.leftUpperArm.z - 0.4);
-                if (riggedPose.rightUpperArm) robotNodes.rightUpperArm.rotation.set(riggedPose.rightUpperArm.x, riggedPose.rightUpperArm.y, riggedPose.rightUpperArm.z + 0.4);
-                
-                if (riggedPose.leftLowerArm) robotNodes.leftLowerArm.rotation.set(riggedPose.leftLowerArm.x, riggedPose.leftLowerArm.y, riggedPose.leftLowerArm.z);
-                if (riggedPose.rightLowerArm) robotNodes.rightLowerArm.rotation.set(riggedPose.rightLowerArm.x, riggedPose.rightLowerArm.y, riggedPose.rightLowerArm.z);
-            }
+                if (riggedFace) {
+                    h.getBoneNode(THREE.VRMHumanoidBoneName.Head).rotation.set(-riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
+                    h.getBoneNode(THREE.VRMHumanoidBoneName.Neck).rotation.set(-riggedFace.head.x * 0.2, riggedFace.head.y * 0.2, 0);
+                    
+                    // 表情の適用
+                    const blendShape = currentVrm.blendShapeProxy;
+                    if (blendShape) {
+                        if (currentExpression === "auto") {
+                            blendShape.setValue(THREE.VRMBlendShapePresetName.BlinkLeft, riggedFace.eye.l);
+                            blendShape.setValue(THREE.VRMBlendShapePresetName.BlinkRight, riggedFace.eye.r);
+                            blendShape.setValue(THREE.VRMBlendShapePresetName.A, riggedFace.mouth.shape.y);
+                        } else {
+                            blendShape.setValue(THREE.VRMBlendShapePresetName.BlinkLeft, 0);
+                            blendShape.setValue(THREE.VRMBlendShapePresetName.BlinkRight, 0);
+                            blendShape.setValue(THREE.VRMBlendShapePresetName.A, 0);
+                        }
+                    }
+                }
 
-            if (trackingTarget === "all") {
-                // 手首のひねり・角度
-                if (riggedLeftHand && riggedLeftHand.leftWrist) robotNodes.leftHand.rotation.set(riggedLeftHand.leftWrist.x, riggedLeftHand.leftWrist.y, riggedLeftHand.leftWrist.z);
-                if (riggedRightHand && riggedRightHand.rightWrist) robotNodes.rightHand.rotation.set(riggedRightHand.rightWrist.x, riggedRightHand.rightWrist.y, riggedRightHand.rightWrist.z);
+                if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose) {
+                    h.getBoneNode(THREE.VRMHumanoidBoneName.Spine).rotation.set(-riggedPose.spine.x, riggedPose.spine.y, riggedPose.spine.z);
+                    
+                    if (riggedPose.leftUpperArm) h.getBoneNode(THREE.VRMHumanoidBoneName.LeftUpperArm).rotation.set(riggedPose.leftUpperArm.x, riggedPose.leftUpperArm.y, riggedPose.leftUpperArm.z - 0.4);
+                    if (riggedPose.rightUpperArm) h.getBoneNode(THREE.VRMHumanoidBoneName.RightUpperArm).rotation.set(riggedPose.rightUpperArm.x, -riggedPose.rightUpperArm.y, -riggedPose.rightUpperArm.z + 0.4);
+                    
+                    if (riggedPose.leftLowerArm) h.getBoneNode(THREE.VRMHumanoidBoneName.LeftLowerArm).rotation.set(riggedPose.leftLowerArm.x, riggedPose.leftLowerArm.y, riggedPose.leftLowerArm.z);
+                    if (riggedPose.rightLowerArm) h.getBoneNode(THREE.VRMHumanoidBoneName.RightLowerArm).rotation.set(riggedPose.rightLowerArm.x, -riggedPose.rightLowerArm.y, -riggedPose.rightLowerArm.z);
+                }
+
+                if (trackingTarget === "all") {
+                    if (riggedLeftHand && riggedLeftHand.leftWrist) h.getBoneNode(THREE.VRMHumanoidBoneName.LeftHand).rotation.set(riggedLeftHand.leftWrist.x, riggedLeftHand.leftWrist.y, riggedLeftHand.leftWrist.z);
+                    if (riggedRightHand && riggedRightHand.rightWrist) h.getBoneNode(THREE.VRMHumanoidBoneName.RightHand).rotation.set(riggedRightHand.rightWrist.x, -riggedRightHand.rightWrist.y, -riggedRightHand.rightWrist.z);
+                }
             }
         }
 
-        // --- ⚙️ 一体化トラッカー（Holistic）の設定拡張初期化 ⚙️ ---
+        // --- Holisticの初期化（クラッシュ修正版） ---
         async function initializeSystem() {
             loadingElement.style.display = 'flex';
-            updateProgress(40, "統合トラッキングモジュール(Holistic)のシステム接続...");
+            updateProgress(40, "統合トラッキングモジュールの読み込み中...");
             
             holistic = new Holistic({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
             });
 
-            // ★【修正】体と手のトラッキング機能を明示的に強制覚醒させる
+            // ★【修正】エラーの原因だった enableFaceGeometry を false に設定
             holistic.setOptions({
                 modelComplexity: 0,
                 smoothLandmarks: true,
                 refineFaceLandmarks: true,
                 enableSegmentation: false,
                 smoothSegmentation: false,
-                // ここの3つのスイッチを強制起動させることで体・手が正常に動くようになります
-                enableFaceGeometry: true,
+                enableFaceGeometry: false, // ここをfalseにすることで不一致クラッシュを完全に防ぎます
                 enablePoseTracking: true,
                 enableHandTracking: true 
             });
@@ -421,7 +523,7 @@
         }
 
         async function startCameraStream(deviceId = null) {
-            updateProgress(85, "カメラデバイスの接続中...");
+            updateProgress(85, "カメラデバイスの起動中...");
             if (cameraUtils) { await cameraUtils.stop(); }
 
             cameraUtils = new Camera(videoElement, {
@@ -435,7 +537,7 @@
 
             try {
                 await cameraUtils.start();
-                updateProgress(100, "システム完全起動！");
+                updateProgress(100, "準備完了！");
                 setTimeout(() => {
                     loadingElement.style.opacity = '0';
                     setTimeout(() => loadingElement.style.display = 'none', 400);
@@ -447,7 +549,7 @@
             }
         }
 
-        // --- 📝 クレジットサインを書き込む特殊合成システム 📝 ---
+        // --- クレジット書き込みシステム ---
         function drawCreditOverlay(targetCanvas) {
             const context = targetCanvas.getContext('2d');
             context.save();
@@ -456,7 +558,6 @@
             context.shadowColor = "black";
             context.shadowBlur = 4;
             context.textAlign = "right";
-            // 画面の右下にしっかりクレジットを焼き付ける
             context.fillText("©hinahina17dayo / vrm-tracker-lite", targetCanvas.width - 20, targetCanvas.height - 20);
             context.restore();
         }
@@ -483,42 +584,36 @@
             document.body.style.background = "#1a1a1a";
         });
 
-        // スクショ機能（クレジット付き）
+        // スクショ
         document.getElementById('btn-screenshot').addEventListener('click', () => {
             renderer.render(scene, camera);
-            
-            // クレジット焼き込み用の臨時キャンバスを作成
             const snapCanvas = document.createElement('canvas');
             snapCanvas.width = canvasElement.width;
             snapCanvas.height = canvasElement.height;
             const snapCtx = snapCanvas.getContext('2d');
-            
             snapCtx.drawImage(canvasElement, 0, 0);
-            drawCreditOverlay(snapCanvas); // クレジット追加
+            drawCreditOverlay(snapCanvas);
 
             const link = document.createElement('a');
-            link.download = `lite_robo_${Date.now()}.png`;
+            link.download = `capture_${Date.now()}.png`;
             link.href = snapCanvas.toDataURL('image/png');
             link.click();
         });
 
-        // 録画機能（クレジット付きストリームの合成）
+        // 録画
         const recordBtn = document.getElementById('btn-record');
         recordBtn.addEventListener('click', () => {
             if (!isRecording) {
                 recordedChunks = [];
-                
-                // 録画専用の動的合成キャンバスシステム
                 const recordCanvas = document.createElement('canvas');
                 recordCanvas.width = canvasElement.width;
                 recordCanvas.height = canvasElement.height;
                 const rCtx = recordCanvas.getContext('2d');
                 
-                // 毎フレーム描画をキャプチャして合成するループを構築
                 function drawRecordLoop() {
                     if (!isRecording) return;
                     rCtx.drawImage(canvasElement, 0, 0);
-                    drawCreditOverlay(recordCanvas); // クレジット常時焼き付け
+                    drawCreditOverlay(recordCanvas);
                     requestAnimationFrame(drawRecordLoop);
                 }
 
@@ -529,7 +624,7 @@
                 mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
                 mediaRecorder.onstop = () => {
                     const link = document.createElement('a');
-                    link.download = `lite_robo_movie_${Date.now()}.webm`;
+                    link.download = `movie_${Date.now()}.webm`;
                     link.href = URL.createObjectURL(new Blob(recordedChunks, { type: 'video/webm' }));
                     link.click();
                 };
@@ -560,6 +655,25 @@
                 document.querySelectorAll('#track-target-buttons .btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
                 trackingTarget = e.target.getAttribute('data-target');
+            }
+        });
+
+        // 表情ボタン制御
+        document.getElementById('expression-buttons').addEventListener('click', (e) => {
+            if (e.target.classList.contains('btn')) {
+                document.querySelectorAll('#expression-buttons .btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                currentExpression = e.target.getAttribute('data-exp');
+                
+                if (!isOfficialAvatar && currentVrm && currentVrm.blendShapeProxy) {
+                    const bp = currentVrm.blendShapeProxy;
+                    // 一旦リセット
+                    bp.setValue(THREE.VRMBlendShapePresetName.Surprised, 0);
+                    bp.setValue(THREE.VRMBlendShapePresetName.Angry, 0);
+                    
+                    if (currentExpression === "surprised") bp.setValue(THREE.VRMBlendShapePresetName.Surprised, 1.0);
+                    if (currentExpression === "angry") bp.setValue(THREE.VRMBlendShapePresetName.Angry, 1.0);
+                }
             }
         });
 
