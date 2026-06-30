@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>vrm-tracker-lite Pro</title>
+    <title>vrm-tracker-lite Ultra</title>
     <style>
         body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: sans-serif; color: white; user-select: none; }
         #canvas { width: 100vw; height: 100vh; display: block; }
@@ -18,10 +18,6 @@
         .btn { background: #333; color: white; border: 1px solid #555; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
         .btn:hover, .btn.active { background: #444; border-color: #00ffcc; color: #00ffcc; }
         
-        .slider-group { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.05); padding: 3px 10px; border-radius: 4px; border: 1px solid #333; }
-        .slider-item { display: flex; align-items: center; gap: 4px; }
-        .slider-item input[type="range"] { width: 60px; accent-color: #00ffcc; margin: 0; }
-
         .status-item { display: flex; align-items: center; gap: 6px; }
         .status-dot { width: 8px; height: 8px; background: #ff4444; border-radius: 50%; display: inline-block; }
         .status-dot.active { background: #00ffcc; box-shadow: 0 0 8px #00ffcc; }
@@ -38,30 +34,40 @@
         #log-container { position: fixed; bottom: 140px; right: 10px; width: 240px; z-index: 20; display: flex; flex-direction: column; gap: 4px; }
         #log-panel { height: 80px; background: rgba(0,0,0,0.8); border: 1px solid #444; border-radius: 4px; font-family: monospace; font-size: 10px; color: #00ffcc; padding: 5px; overflow-y: auto; box-sizing: border-box; }
         .log-entry { margin-bottom: 2px; line-height: 1.2; word-break: break-all; }
-        .log-entry.err { color: #ff4444; }
 
-        #loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 16px; background: rgba(0,0,0,0.85); padding: 25px 40px; border-radius: 8px; border: 1px solid #444; pointer-events: none; z-index: 30; text-align: center; transition: opacity 0.3s; }
-        .spinner { border: 3px solid rgba(255,255,255,0.1); width: 24px; height: 24px; border-radius: 50%; border-left-color: #00ffcc; animation: spin 1s linear infinite; margin: 0 auto 10px auto; }
+        /* パーセント表示付きローディング */
+        #loading { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15,15,15,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; transition: opacity 0.4s; }
+        .spinner { border: 4px solid rgba(255,255,255,0.1); width: 50px; height: 50px; border-radius: 50%; border-left-color: #00ffcc; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        #progress-percent { font-size: 32px; font-weight: bold; color: #00ffcc; font-family: monospace; margin-bottom: 10px; }
+        #loading-text { color: #aaa; font-size: 13px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        #help-toast { position: fixed; top: 110px; right: 10px; background: rgba(0,0,0,0.8); padding: 10px 15px; border-radius: 6px; font-size: 11px; border: 1px solid #444; pointer-events: none; line-height: 1.5; color: #ccc; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://unpkg.com/@pixiv/three-vrm@0.6.7/lib/three-vrm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/kalidokit@1.1.5/dist/kalidokit.umd.js"></script>
 </head>
 <body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <div id="progress-percent">0%</div>
+        <div id="loading-text">システム初期化中...</div>
+    </div>
+
     <div id="taskbar">
         <div class="taskbar-row">
-            <div><strong>vrm-tracker-lite Pro</strong></div>
-            <div class="slider-group">
-                <span style="color:#00ffcc;">位置・向き調整:</span>
-                <div class="slider-item"><label>左右</label><input type="range" id="pos-x" min="-1" max="1" step="0.01" value="0"></div>
-                <div class="slider-item"><label>高さ</label><input type="range" id="pos-y" min="-1" max="1" step="0.01" value="0"></div>
-                <div class="slider-item"><label>奥行</label><input type="range" id="pos-z" min="-1" max="1" step="0.01" value="0"></div>
-                <div class="slider-item"><label>回転</label><input type="range" id="rot-y" min="-180" max="180" step="1" value="180"></div>
+            <div><strong>vrm-tracker-lite Ultra</strong></div>
+            <div class="controls" id="camera-quality-buttons">
+                <span style="color:#00ffcc;">カメラ認識精度:</span>
+                <button class="btn active" data-w="320" data-h="240">標準 (軽量)</button>
+                <button class="btn" data-w="640" data-h="480">高精度 (推奨)</button>
+                <button class="btn" data-w="1280" data-h="720">超高精度 (重い)</button>
             </div>
             <div class="controls">
                 <button id="toggle-video" class="btn">カメラ非表示</button>
@@ -95,13 +101,15 @@
         <div class="meta-line">作者: <span id="meta-author">System Generated</span></div>
     </div>
 
-    <div id="log-container">
-        <div id="log-panel"></div>
+    <div id="help-toast">
+        🖱️ <b>アバター操作方法</b><br>
+        ・左ドラッグ：アバターの向き変更（回転）<br>
+        ・右ドラッグ：位置の移動<br>
+        ・ホイール：拡大 / 縮小
     </div>
 
-    <div id="loading">
-        <div class="spinner"></div>
-        <div id="loading-text">AIとカメラを起動中...</div>
+    <div id="log-container">
+        <div id="log-panel"></div>
     </div>
     
     <div id="video-container">
@@ -118,7 +126,9 @@
         const ctx = overlayCanvas.getContext('2d');
         
         const loadingElement = document.getElementById('loading');
+        const progressPercent = document.getElementById('progress-percent');
         const loadingText = document.getElementById('loading-text');
+        
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
         const dropZone = document.getElementById('drop-zone');
@@ -128,18 +138,21 @@
         const metaName = document.getElementById('meta-name');
         const metaAuthor = document.getElementById('meta-author');
 
-        // 位置スライダーの取得
-        const sliderX = document.getElementById('pos-x');
-        const sliderY = document.getElementById('pos-y');
-        const sliderZ = document.getElementById('pos-z');
-        const sliderRotY = document.getElementById('rot-y');
-
         let currentVrm = null;
         let dummyVrm = null; 
         let isUsingDummy = true;
         let currentExpressionMode = "auto";
-        let trackingTarget = "face"; // face, body, all
-        let basePosition = new THREE.Vector3(0, 0, 0);
+        let trackingTarget = "face"; 
+        let cameraUtils = null;
+        let holistic = null;
+        let currentCamW = 320;
+        let currentCamH = 240;
+
+        function updateProgress(percent, text) {
+            progressPercent.innerText = `${percent}%`;
+            loadingText.innerText = text;
+            addLog(`${text} (${percent}%)`);
+        }
 
         function addLog(text, isError = false) {
             const time = new Date().toLocaleTimeString();
@@ -150,8 +163,7 @@
             logPanel.scrollTop = logPanel.scrollHeight;
         }
 
-        addLog("システムを起動しています...");
-
+        // Three.js 初期化
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
         camera.position.set(0.0, 1.4, 0.55);
@@ -165,72 +177,53 @@
         scene.add(light);
         scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-        // 初期アバター（ロボット）生成
+        // ★ バーの代わりにカメラ側（視点）をドラッグ操作できるように拡張
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.target.set(0.0, 1.4, 0.0);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.1;
+        controls.screenSpacePanning = true; // 右ドラッグで平行移動を可能にする
+
+        // ロボット生成
         function createDummyAvatar() {
             const group = new THREE.Group();
             const bodyMat = new THREE.MeshStandardMaterial({ color: 0x444446, roughness: 0.4 });
             const faceMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc });
             
-            const neckGeo = new THREE.CylinderGeometry(0.02, 0.025, 0.1);
-            const neckMesh = new THREE.Mesh(neckGeo, bodyMat);
+            const neckMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.1), bodyMat);
             neckMesh.position.y = 1.25;
             group.add(neckMesh);
 
             const headGroup = new THREE.Group();
             headGroup.position.y = 1.4; 
-            const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), bodyMat);
-            headGroup.add(headMesh);
+            headGroup.add(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), bodyMat));
 
             const visor = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.04, 0.02), faceMat);
             visor.position.set(0, 0.02, 0.065);
             headGroup.add(visor);
 
-            const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.008, 0.01), faceMat);
-            mouth.position.set(0, -0.04, 0.07);
-            headGroup.add(mouth);
-
             group.add(headGroup);
             scene.add(group);
 
-            dummyVrm = { scene: group, head: headGroup, neck: neckMesh, mouth: mouth, visor: visor, update: () => {} };
-            camera.lookAt(0.0, 1.4, 0.0);
-            addLog("初期アバターを生成しました。");
+            dummyVrm = { scene: group, head: headGroup, update: () => {} };
         }
         createDummyAvatar();
 
-        // 位置・回転のリアルタイム反映ループ
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
-            
-            const targetScene = isUsingDummy ? dummyVrm?.scene : currentVrm?.scene;
-            if (targetScene) {
-                // スライダーの値を位置と向きに反映
-                targetScene.position.x = basePosition.x + parseFloat(sliderX.value);
-                targetScene.position.y = basePosition.y + parseFloat(sliderY.value);
-                targetScene.position.z = basePosition.z + parseFloat(sliderZ.value);
-                targetScene.rotation.y = (parseFloat(sliderRotY.value) * Math.PI) / 180;
-            }
-
+            controls.update(); // ドラッグ操作の更新
             if (currentVrm) { currentVrm.update(delta); }
             renderer.render(scene, camera);
         }
         animate();
 
-        // 簡易プレビュー描画
         function drawOverlay(results) {
             ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
             ctx.fillStyle = "#00ffcc";
             if (results.faceLandmarks) {
                 results.faceLandmarks.forEach(pt => ctx.fillRect(pt.x * overlayCanvas.width - 1, pt.y * overlayCanvas.height - 1, 2, 2));
-            }
-            ctx.fillStyle = "#ff3366";
-            if (results.leftHandLandmarks) {
-                results.leftHandLandmarks.forEach(pt => ctx.fillRect(pt.x * overlayCanvas.width - 2, pt.y * overlayCanvas.height - 2, 4, 4));
-            }
-            if (results.rightHandLandmarks) {
-                results.rightHandLandmarks.forEach(pt => ctx.fillRect(pt.x * overlayCanvas.width - 2, pt.y * overlayCanvas.height - 2, 4, 4));
             }
         }
 
@@ -254,18 +247,16 @@
                             currentVrm = vrm;
                             scene.add(vrm.scene);
 
-                            // ボーン位置を基準にカメラと基本位置を自動調整
                             const head = vrm.humanoid?.getBoneNode('head');
                             if(head) {
                                 const headWorldPos = new THREE.Vector3();
                                 head.getWorldPosition(headWorldPos);
+                                controls.target.set(0.0, headWorldPos.y, 0.0);
                                 camera.position.set(0.0, headWorldPos.y, 0.55);
-                                camera.lookAt(0.0, headWorldPos.y, 0.0);
                             }
 
                             metaName.innerText = vrm.meta?.title || "未設定";
                             metaAuthor.innerText = vrm.meta?.author || "未設定";
-                            addLog(`アバター構築成功: ${vrm.meta?.title || "VRM"}`);
                             resolve(vrm);
                         }).catch(e => reject({ code: "ERR_VRM_PARSE", detail: e.message }));
                     }, undefined, (err) => reject({ code: "ERR_GLTF_LOAD", detail: err?.message }));
@@ -273,9 +264,13 @@
             });
         }
 
-        // AIトラッキングのメイン処理
+        // トラッキング初期化システム
         async function initializeSystem() {
-            const holistic = new Holistic({
+            loadingElement.style.display = 'flex';
+            loadingElement.style.opacity = '1';
+            
+            updateProgress(10, "AIエンジンを読み込み中...");
+            holistic = new Holistic({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
             });
 
@@ -287,6 +282,7 @@
                 minTrackingConfidence: 0.5
             });
 
+            updateProgress(40, "AIトラッキングのイベント設定中...");
             holistic.onResults((results) => {
                 if (overlayCanvas.width !== videoElement.videoWidth) {
                     overlayCanvas.width = videoElement.videoWidth;
@@ -294,7 +290,6 @@
                 }
                 drawOverlay(results);
 
-                // Kalidokitで骨組みの角度計算
                 const riggedPose = Kalidokit.Pose.solve(results.poseLandmarks, results.ea, { runtime: "mediapipe", video: videoElement });
                 const riggedFace = Kalidokit.Face.solve(results.faceLandmarks, { runtime: "mediapipe", video: videoElement });
                 const riggedLeftHand = Kalidokit.Hand.solve(results.leftHandLandmarks, "Left");
@@ -308,14 +303,12 @@
                 if (currentVrm) {
                     const humanoid = currentVrm.humanoid;
                     
-                    // 1. 【かお】の連動
                     if (riggedFace) {
                         const head = humanoid?.getBoneNode('head');
                         const neck = humanoid?.getBoneNode('neck');
                         if (head) head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
                         if (neck) neck.rotation.set(riggedFace.head.x * 0.3, riggedFace.head.y * 0.3, riggedFace.head.z * 0.3);
                         
-                        // 表情処理
                         const target = currentVrm.blendShapeProxy;
                         if (target) {
                             if (currentExpressionMode === "auto") {
@@ -330,7 +323,6 @@
                         }
                     }
 
-                    // 2. 【からだ（上半身）】の連動 (body または all の場合)
                     if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose) {
                         const spine = humanoid?.getBoneNode('spine');
                         const chest = humanoid?.getBoneNode('chest');
@@ -347,12 +339,10 @@
                         if (lowerArmR) lowerArmR.rotation.set(riggedPose.rightLowerArm.x, riggedPose.rightLowerArm.y, riggedPose.rightLowerArm.z);
                     }
 
-                    // 3. 【て（指先）】の連動 (all の場合のみ)
                     if (trackingTarget === "all") {
                         if (riggedLeftHand) {
                             const handL = humanoid?.getBoneNode('leftHand');
                             if (handL) handL.rotation.set(riggedLeftHand.leftWrist.x, riggedLeftHand.leftWrist.y, riggedLeftHand.leftWrist.z);
-                            // 指の連動ループ（簡易）
                             ['thumb','index','middle','ring','little'].forEach(finger => {
                                 for(let i=1; i<=3; i++) {
                                     const bone = humanoid?.getBoneNode(`left${finger.charAt(0).toUpperCase() + finger.slice(1)}${i}`);
@@ -374,40 +364,64 @@
                 }
             });
 
-            const cameraUtils = new Camera(videoElement, {
+            await startCameraStream(currentCamW, currentCamH);
+        }
+
+        // カメラストリームの起動
+        async function startCameraStream(width, height) {
+            updateProgress(70, `カメラデバイス (${width}x${height}) を起動中...`);
+            
+            if (cameraUtils) {
+                await cameraUtils.stop();
+            }
+
+            cameraUtils = new Camera(videoElement, {
                 onFrame: async () => { await holistic.send({ image: videoElement }); },
-                width: 320, height: 240
+                width: width,
+                height: height
             });
 
             try {
                 await cameraUtils.start();
-                loadingElement.style.display = 'none';
+                updateProgress(100, "システム構築が完了しました！");
+                setTimeout(() => {
+                    loadingElement.style.opacity = '0';
+                    setTimeout(() => loadingElement.style.display = 'none', 400);
+                }, 500);
+                
                 statusDot.className = "status-dot active";
-                statusText.innerText = "準備完了。VRMをドロップしてください。";
-                addLog("AIトラッキングエンジンが正常に起動しました。");
+                statusText.innerText = `認識中 (${width}x${height})`;
             } catch (e) {
-                addLog("カメラの起動に失敗しました。", true);
+                updateProgress(0, "エラー: カメラの起動に失敗しました。");
                 statusDot.className = "status-dot error";
-                statusText.innerText = "カメラエラー";
+                statusText.innerText = "カメラブロックエラー";
             }
         }
 
-        // 動かす場所のボタン切り替えイベント
+        // カメラ精度（解像度）の切り替え処理
+        document.getElementById('camera-quality-buttons').addEventListener('click', async (e) => {
+            if (e.target.classList.contains('btn') && !e.target.classList.contains('active')) {
+                document.querySelectorAll('#camera-quality-buttons .btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                
+                currentCamW = parseInt(e.target.getAttribute('data-w'));
+                currentCamH = parseInt(e.target.getAttribute('data-h'));
+                
+                addLog(`カメラ精度変更リクエスト: ${currentCamW}x${currentCamH}`);
+                await startCameraStream(currentCamW, currentCamH);
+            }
+        });
+
+        // 動かす場所切り替え
         document.getElementById('track-target-buttons').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn')) {
                 document.querySelectorAll('#track-target-buttons .btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
                 trackingTarget = e.target.getAttribute('data-target');
-                addLog(`動かす場所を切り替えました: [${e.target.innerText}]`);
-                
-                // 切り替え時に対象外パーツのポーズを安全にリセット
-                if (currentVrm && trackingTarget !== "all") {
-                    // 指や腕のポーズを初期化する処理をここに入れるとより滑らかになります
-                }
             }
         });
 
-        // 表情切り替えイベント
+        // 表情切り替え
         document.getElementById('expression-buttons').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn')) {
                 document.querySelectorAll('#expression-buttons .btn').forEach(b => b.classList.remove('active'));
@@ -416,11 +430,11 @@
             }
         });
 
-        // ファイルドロップ処理
+        // ファイル処理
         dropZone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => processFile(e.target.files[0]));
         window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background = 'rgba(0, 255, 204, 0.2)'; });
-        window.addEventListener('dragleave', () => dropZone.style.background = 'rgba(0,0,0,0.7)';);
+        window.addEventListener('dragleave', () => dropZone.style.background = 'rgba(0,0,0,0.7)');
         window.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.style.background = 'rgba(0,0,0,0.7)';
@@ -433,17 +447,15 @@
             const reader = new FileReader();
             reader.onload = (e) => {
                 loadVRM(e.target.result).catch(err => {
-                    addLog(`構築失敗: ${err.code} (${err.detail})`, true);
+                    addLog(`構築失敗: ${err.code}`, true);
                 });
             };
             reader.readAsDataURL(file);
         }
 
-        const toggleVideoBtn = document.getElementById('toggle-video');
-        toggleVideoBtn.addEventListener('click', () => {
+        document.getElementById('toggle-video').addEventListener('click', () => {
             const container = document.getElementById('video-container');
             container.style.opacity = container.style.opacity === '0' ? '1' : '0';
-            toggleVideoBtn.innerText = container.style.opacity === '0' ? "カメラ表示" : "カメラ非表示";
         });
 
         window.addEventListener('resize', () => {
