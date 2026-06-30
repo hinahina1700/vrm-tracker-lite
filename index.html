@@ -24,7 +24,6 @@
         .status-item { display: flex; align-items: center; gap: 6px; }
         .status-dot { width: 8px; height: 8px; background: #ff4444; border-radius: 50%; display: inline-block; }
         .status-dot.active { background: #00ffcc; box-shadow: 0 0 8px #00ffcc; }
-        .status-dot.error { background: #ff3333; box-shadow: 0 0 8px #ff3333; }
 
         #drop-zone { position: fixed; top: 110px; left: 10px; padding: 15px; background: rgba(0,0,0,0.7); color: white; border: 2px dashed #aaa; border-radius: 8px; font-size: 12px; z-index: 20; text-align: center; cursor: pointer; transition: all 0.2s; }
         #drop-zone:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
@@ -34,17 +33,12 @@
         #vrm-meta-panel h4 { margin: 0 0 6px 0; color: #00ffcc; font-size: 12px; border-bottom: 1px solid #444; padding-bottom: 4px; }
         .meta-line { margin: 3px 0; color: #ddd; }
 
-        #log-container { position: fixed; bottom: 140px; right: 10px; width: 240px; z-index: 20; display: flex; flex-direction: column; gap: 4px; }
-        #log-panel { height: 80px; background: rgba(0,0,0,0.8); border: 1px solid #444; border-radius: 4px; font-family: monospace; font-size: 10px; color: #00ffcc; padding: 5px; overflow-y: auto; box-sizing: border-box; }
-        .log-entry { margin-bottom: 2px; line-height: 1.2; word-break: break-all; }
-
         #loading { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15,15,15,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; transition: opacity 0.4s; }
         .spinner { border: 4px solid rgba(255,255,255,0.1); width: 50px; height: 50px; border-radius: 50%; border-left-color: #00ffcc; animation: spin 1s linear infinite; margin-bottom: 20px; }
         #progress-percent { font-size: 36px; font-weight: bold; color: #00ffcc; font-family: monospace; margin-bottom: 10px; }
         #loading-text { color: #aaa; font-size: 13px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        #help-toast { position: fixed; top: 110px; right: 10px; background: rgba(0,0,0,0.8); padding: 10px 15px; border-radius: 6px; font-size: 11px; border: 1px solid #444; pointer-events: none; line-height: 1.5; color: #ccc; }
         .color-picker-wrapper { display: flex; align-items: center; gap: 4px; }
         #bg-color-input { width: 22px; height: 18px; border: 1px solid #555; padding: 0; background: none; cursor: pointer; }
     </style>
@@ -55,14 +49,15 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/kalidokit@1.1.5/dist/kalidokit.umd.js"></script>
 </head>
 <body>
     <div id="loading">
         <div class="spinner"></div>
         <div id="progress-percent">0%</div>
-        <div id="loading-text">システム初期化中...</div>
+        <div id="loading-text">システム高速初期化中...</div>
     </div>
 
     <div id="taskbar">
@@ -71,12 +66,6 @@
                 <strong>vrm-tracker-lite</strong>
                 <button id="btn-switch-camera" class="btn" style="border-color:#00ffcc;">📷 カメラ切替</button>
                 <button id="btn-pip" class="btn">📌 小窓化 (PiP)</button>
-            </div>
-            
-            <div class="controls" id="camera-quality-buttons">
-                <span style="color:#aaa;">精度:</span>
-                <button class="btn active" data-w="320" data-h="240">標準</button>
-                <button class="btn" data-w="640" data-h="480">高精度</button>
             </div>
 
             <div class="controls">
@@ -94,9 +83,8 @@
         <div class="taskbar-row" style="border-top: 1px solid #333; padding-top: 4px;">
             <div class="controls" id="track-target-buttons">
                 <span style="color:#aaa;">動かす場所:</span>
-                <button class="btn active" data-target="face">顔のみ</button>
-                <button class="btn" data-target="body">顔＋からだ</button>
-                <button class="btn" data-target="all">顔＋からだ＋て</button>
+                <button class="btn" data-target="face">顔のみ</button>
+                <button class="btn active" data-target="body">顔＋からだ（高速モード）</button>
             </div>
             <div class="controls" id="expression-buttons">
                 <span style="color:#aaa;">表情:</span>
@@ -126,16 +114,8 @@
         <div class="meta-line">作者: <span id="meta-author">System Generated</span></div>
     </div>
 
-    <div id="help-toast">
-        右ドラッグで移動、左ドラッグで回転、ホイールで拡大縮小できます。
-    </div>
-
-    <div id="log-container">
-        <div id="log-panel"></div>
-    </div>
-    
     <div id="video-container">
-        <video id="video" autoplay playsinline muted></video>
+        <video id="video" autoplay playsinline muted style="width:160px; height:120px;"></video>
         <canvas id="overlay-canvas"></canvas>
     </div>
     
@@ -155,7 +135,6 @@
         const statusText = document.getElementById('status-text');
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
-        const logPanel = document.getElementById('log-panel');
         
         const metaName = document.getElementById('meta-name');
         const metaAuthor = document.getElementById('meta-author');
@@ -165,15 +144,19 @@
         let dummyVrm = null; 
         let isUsingDummy = true;
         let currentExpressionMode = "auto";
-        let trackingTarget = "face"; 
+        let trackingTarget = "body"; 
         let cameraUtils = null;
-        let holistic = null;
-        let currentCamW = 320;
-        let currentCamH = 240;
+
+        // 軽量な個別トラッカー群
+        let faceMesh = null;
+        let poseEstimator = null;
+
+        // データ同期用のバッファ
+        let latestFaceLandmarks = null;
+        let latestPoseLandmarks = null;
 
         let videoDevices = [];
         let currentDeviceIndex = 0;
-
         let mediaRecorder = null;
         let recordedChunks = [];
         let isRecording = false;
@@ -181,18 +164,9 @@
         function updateProgress(percent, text) {
             progressPercent.innerText = `${percent}%`;
             loadingText.innerText = text;
-            addLog(`${text} (${percent}%)`);
         }
 
-        function addLog(text, isError = false) {
-            const time = new Date().toLocaleTimeString();
-            const entry = document.createElement('div');
-            entry.className = 'log-entry' + (isError ? ' err' : '');
-            entry.innerText = `[${time}] ${text}`;
-            logPanel.appendChild(entry);
-            logPanel.scrollTop = logPanel.scrollHeight;
-        }
-
+        // 3Dシーン構築
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
         camera.position.set(0.0, 1.4, 0.55);
@@ -238,21 +212,101 @@
         }
         createDummyAvatar();
 
+        // 🌟 描画＆AI追従メインループ（超高速・低負荷）
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
             controls.update(); 
+
+            // 毎フレーム、最新の顔・体データを安全にアバターへ適用
+            processTrackingData();
+
             if (currentVrm) { currentVrm.update(delta); }
             renderer.render(scene, camera);
         }
         animate();
 
-        function drawOverlay(results) {
+        function drawOverlay() {
             ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
             ctx.fillStyle = "#00ffcc";
-            if (results.faceLandmarks) {
-                results.faceLandmarks.forEach(pt => ctx.fillRect(pt.x * overlayCanvas.width - 1, pt.y * overlayCanvas.height - 1, 2, 2));
+            if (latestFaceLandmarks) {
+                // 間引きして軽量に描画
+                for(let i=0; i<latestFaceLandmarks.length; i+=5) {
+                    const pt = latestFaceLandmarks[i];
+                    ctx.fillRect(pt.x * overlayCanvas.width - 1, pt.y * overlayCanvas.height - 1, 2, 2);
+                }
+            }
+        }
+
+        // 🌟 集約されたトラッキング計算処理（絶対にフリーズしない安全弁）
+        function processTrackingData() {
+            if (!latestFaceLandmarks && !latestPoseLandmarks) return;
+
+            let riggedFace = null;
+            let riggedPose = null;
+
+            try {
+                if (latestFaceLandmarks && latestFaceLandmarks.length > 0) {
+                    riggedFace = Kalidokit.Face.solve(latestFaceLandmarks, { runtime: "mediapipe", video: videoElement });
+                }
+            } catch(e) {}
+
+            try {
+                if (latestPoseLandmarks && latestPoseLandmarks.length > 23) {
+                    riggedPose = Kalidokit.Pose.solve(latestPoseLandmarks, null, { runtime: "mediapipe", video: videoElement });
+                }
+            } catch(e) {}
+
+            if (isUsingDummy && dummyVrm && riggedFace) {
+                dummyVrm.head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
+                return;
+            }
+
+            if (currentVrm) {
+                const humanoid = currentVrm.humanoid;
+                
+                // 顔の同期
+                if (riggedFace) {
+                    const head = humanoid?.getBoneNode('head');
+                    const neck = humanoid?.getBoneNode('neck');
+                    if (head) head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
+                    if (neck) neck.rotation.set(riggedFace.head.x * 0.3, riggedFace.head.y * 0.3, riggedFace.head.z * 0.3);
+                    
+                    const target = currentVrm.blendShapeProxy;
+                    if (target) {
+                        if (currentExpressionMode === "auto") {
+                            // ★【重要バグ修正】MediaPipe v0.10系での目の開閉フラグ反転を力技で補正 (1.0 - 数値)
+                            const blinkL = Math.max(0, Math.min(1, 1.0 - (riggedFace.eye.l * 1.5)));
+                            const blinkR = Math.max(0, Math.min(1, 1.0 - (riggedFace.eye.r * 1.5)));
+                            
+                            target.setValue('blink_l', blinkL);
+                            target.setValue('blink_r', blinkR);
+                            target.setValue('i', riggedFace.mouth.shape.I);
+                            target.setValue('u', riggedFace.mouth.shape.U);
+                            target.setValue('a', riggedFace.mouth.shape.A);
+                        } else {
+                            ['angry', 'fun', 'joy', 'sorrow'].forEach(exp => target.setValue(exp, exp === currentExpressionMode ? 1.0 : 0.0));
+                        }
+                    }
+                }
+
+                // からだの同期
+                if (trackingTarget === "body" && riggedPose) {
+                    const spine = humanoid?.getBoneNode('spine');
+                    const chest = humanoid?.getBoneNode('chest');
+                    const upperArmL = humanoid?.getBoneNode('leftUpperArm');
+                    const upperArmR = humanoid?.getBoneNode('rightUpperArm');
+                    const lowerArmL = humanoid?.getBoneNode('leftLowerArm');
+                    const lowerArmR = humanoid?.getBoneNode('rightLowerArm');
+
+                    if (spine) spine.rotation.set(riggedPose.spine.x, riggedPose.spine.y, riggedPose.spine.z);
+                    if (chest) chest.rotation.set(riggedPose.spine.x * 0.5, riggedPose.spine.y * 0.5, riggedPose.spine.z * 0.5);
+                    if (upperArmL) upperArmL.rotation.set(riggedPose.leftUpperArm.x, riggedPose.leftUpperArm.y, riggedPose.leftUpperArm.z);
+                    if (upperArmR) upperArmR.rotation.set(riggedPose.rightUpperArm.x, riggedPose.rightUpperArm.y, riggedPose.rightUpperArm.z);
+                    if (lowerArmL) lowerArmL.rotation.set(riggedPose.leftLowerArm.x, riggedPose.leftLowerArm.y, riggedPose.leftLowerArm.z);
+                    if (lowerArmR) lowerArmR.rotation.set(riggedPose.rightLowerArm.x, riggedPose.rightLowerArm.y, riggedPose.rightLowerArm.z);
+                }
             }
         }
 
@@ -275,6 +329,7 @@
                             currentVrm = vrm;
                             scene.add(vrm.scene);
 
+                            // 初期デフォルトAポーズ固定
                             const humanoid = vrm.humanoid;
                             if (humanoid) {
                                 const leftUpperArm = humanoid.getBoneNode('leftUpperArm');
@@ -294,190 +349,87 @@
                             metaName.innerText = vrm.meta?.title || "未設定";
                             metaAuthor.innerText = vrm.meta?.author || "未設定";
                             resolve(vrm);
-                        }).catch(e => reject({ code: "ERR_VRM_PARSE", detail: e.message }));
-                    }, undefined, (err) => reject({ code: "ERR_GLTF_LOAD", detail: err?.message }));
-                } catch (e) { reject({ code: "ERR_SETUP", detail: e.message }); }
+                        }).catch(e => reject(e));
+                    }, undefined, (err) => reject(err));
+                } catch (e) { reject(e); }
             });
         }
 
+        // 🌟 独立した2つの軽量エンジンを爆速初期化
         async function initializeSystem() {
             loadingElement.style.display = 'flex';
-            loadingElement.style.opacity = '1';
             
-            updateProgress(15, "AIトラッキングライブラリを待機中...");
-            holistic = new Holistic({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
-            });
-
-            holistic.setOptions({
-                modelComplexity: 1,
-                smoothLandmarks: true,
-                refineFaceLandmarks: true,
-                minDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
-            });
-
-            updateProgress(40, "利用可能なカメラを検索中...");
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                videoDevices = devices.filter(d => d.kind === 'videoinput');
-            } catch (e) {
-                addLog("カメラ一覧の取得に失敗しました", true);
-            }
-
-            updateProgress(60, "安全弁付き骨組み解析エンジンの紐付け中...");
-            holistic.onResults((results) => {
+            updateProgress(20, "軽量顔トラッカーを起動中...");
+            faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
+            faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+            faceMesh.onResults((results) => {
+                latestFaceLandmarks = results.multiFaceLandmarks ? results.multiFaceLandmarks[0] : null;
                 if (overlayCanvas.width !== videoElement.videoWidth) {
                     overlayCanvas.width = videoElement.videoWidth;
                     overlayCanvas.height = videoElement.videoHeight;
                 }
-                drawOverlay(results);
-
-                // ★【超重要】クラッシュ防止の安全ガードを追加
-                let riggedFace = null;
-                let riggedPose = null;
-                let riggedLeftHand = null;
-                let riggedRightHand = null;
-
-                try {
-                    if (results.faceLandmarks && results.faceLandmarks.length > 0) {
-                        riggedFace = Kalidokit.Face.solve(results.faceLandmarks, { runtime: "mediapipe", video: videoElement });
-                    }
-                } catch(e) { /* エラーを握りつぶして進める */ }
-
-                try {
-                    // エラー23番の原因である「データが不完全な場合」はKalidokitに渡さないガード
-                    if (results.poseLandmarks && results.poseLandmarks.length > 23) {
-                        riggedPose = Kalidokit.Pose.solve(results.poseLandmarks, results.ea, { runtime: "mediapipe", video: videoElement });
-                    }
-                } catch(e) { }
-
-                try {
-                    if (results.leftHandLandmarks && results.leftHandLandmarks.length > 0) {
-                        riggedLeftHand = Kalidokit.Hand.solve(results.leftHandLandmarks, "Left");
-                    }
-                } catch(e) { }
-
-                try {
-                    if (results.rightHandLandmarks && results.rightHandLandmarks.length > 0) {
-                        riggedRightHand = Kalidokit.Hand.solve(results.rightHandLandmarks, "Right");
-                    }
-                } catch(e) { }
-
-                if (isUsingDummy && dummyVrm && riggedFace) {
-                    dummyVrm.head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
-                    return;
-                }
-
-                if (currentVrm) {
-                    const humanoid = currentVrm.humanoid;
-                    
-                    if (riggedFace) {
-                        const head = humanoid?.getBoneNode('head');
-                        const neck = humanoid?.getBoneNode('neck');
-                        if (head) head.rotation.set(riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
-                        if (neck) neck.rotation.set(riggedFace.head.x * 0.3, riggedFace.head.y * 0.3, riggedFace.head.z * 0.3);
-                        
-                        const target = currentVrm.blendShapeProxy;
-                        if (target) {
-                            if (currentExpressionMode === "auto") {
-                                target.setValue('blink_l', riggedFace.eye.l);
-                                target.setValue('blink_r', riggedFace.eye.r);
-                                target.setValue('i', riggedFace.mouth.shape.I);
-                                target.setValue('u', riggedFace.mouth.shape.U);
-                                target.setValue('a', riggedFace.mouth.shape.A);
-                            } else {
-                                ['angry', 'fun', 'joy', 'sorrow'].forEach(exp => target.setValue(exp, exp === currentExpressionMode ? 1.0 : 0.0));
-                            }
-                        }
-                    }
-
-                    if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose) {
-                        const spine = humanoid?.getBoneNode('spine');
-                        const chest = humanoid?.getBoneNode('chest');
-                        const upperArmL = humanoid?.getBoneNode('leftUpperArm');
-                        const upperArmR = humanoid?.getBoneNode('rightUpperArm');
-                        const lowerArmL = humanoid?.getBoneNode('leftLowerArm');
-                        const lowerArmR = humanoid?.getBoneNode('rightLowerArm');
-
-                        if (spine) spine.rotation.set(riggedPose.spine.x, riggedPose.spine.y, riggedPose.spine.z);
-                        if (chest) chest.rotation.set(riggedPose.spine.x * 0.5, riggedPose.spine.y * 0.5, riggedPose.spine.z * 0.5);
-                        if (upperArmL) upperArmL.rotation.set(riggedPose.leftUpperArm.x, riggedPose.leftUpperArm.y, riggedPose.leftUpperArm.z);
-                        if (upperArmR) upperArmR.rotation.set(riggedPose.rightUpperArm.x, riggedPose.rightUpperArm.y, riggedPose.rightUpperArm.z);
-                        if (lowerArmL) lowerArmL.rotation.set(riggedPose.leftLowerArm.x, riggedPose.leftLowerArm.y, riggedPose.leftLowerArm.z);
-                        if (lowerArmR) lowerArmR.rotation.set(riggedPose.rightLowerArm.x, riggedPose.rightLowerArm.y, riggedPose.rightLowerArm.z);
-                    }
-
-                    if (trackingTarget === "all") {
-                        if (riggedLeftHand) {
-                            const handL = humanoid?.getBoneNode('leftHand');
-                            if (handL) handL.rotation.set(riggedLeftHand.leftWrist.x, riggedLeftHand.leftWrist.y, riggedLeftHand.leftWrist.z);
-                            ['thumb','index','middle','ring','little'].forEach(finger => {
-                                for(let i=1; i<=3; i++) {
-                                    const bone = humanoid?.getBoneNode(`left${finger.charAt(0).toUpperCase() + finger.slice(1)}${i}`);
-                                    if(bone && riggedLeftHand[finger]) bone.rotation.z = riggedLeftHand[finger][i-1].z;
-                                }
-                            });
-                        }
-                        if (riggedRightHand) {
-                            const handR = humanoid?.getBoneNode('rightHand');
-                            if (handR) handR.rotation.set(riggedRightHand.rightWrist.x, riggedRightHand.rightWrist.y, riggedRightHand.rightWrist.z);
-                            ['thumb','index','middle','ring','little'].forEach(finger => {
-                                for(let i=1; i<=3; i++) {
-                                    const bone = humanoid?.getBoneNode(`right${finger.charAt(0).toUpperCase() + finger.slice(1)}${i}`);
-                                    if(bone && riggedRightHand[finger]) bone.rotation.z = riggedRightHand[finger][i-1].z;
-                                }
-                            });
-                        }
-                    }
-                }
+                drawOverlay();
             });
 
-            await startCameraStream(currentCamW, currentCamH);
+            updateProgress(50, "軽量姿勢トラッカーを起動中...");
+            poseEstimator = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+            poseEstimator.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 }); // Complexity 0 で最軽量化
+            poseEstimator.onResults((results) => {
+                latestPoseLandmarks = results.poseLandmarks || null;
+            });
+
+            updateProgress(70, "利用可能なカメラをスキャン中...");
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                videoDevices = devices.filter(d => d.kind === 'videoinput');
+            } catch (e) {}
+
+            await startCameraStream();
         }
 
-        async function startCameraStream(width, height, deviceId = null) {
-            updateProgress(80, "カメラ入力を同期して起動中...");
+        async function startCameraStream(deviceId = null) {
+            updateProgress(85, "カメラ映像ストリームを同期中...");
             if (cameraUtils) { await cameraUtils.stop(); }
 
+            // 画質を小さく（320x240）固定してAIの負荷を極限までカット
             cameraUtils = new Camera(videoElement, {
-                onFrame: async () => { await holistic.send({ image: videoElement }); },
-                width: width,
-                height: height,
+                onFrame: async () => {
+                    // 両方のトラッカーへ同時に映像を流し込む
+                    await Promise.all([
+                        faceMesh.send({ image: videoElement }),
+                        poseEstimator.send({ image: videoElement })
+                    ]);
+                },
+                width: 320,
+                height: 240,
                 deviceId: deviceId
             });
 
             try {
                 await cameraUtils.start();
-                updateProgress(100, "準備が完了しました！");
+                updateProgress(100, "すべてのシステムが軽量稼働しました！");
                 setTimeout(() => {
                     loadingElement.style.opacity = '0';
                     setTimeout(() => loadingElement.style.display = 'none', 400);
-                }, 500);
+                }, 400);
                 statusDot.className = "status-dot active";
-                statusText.innerText = `認識中`;
+                statusText.innerText = `軽量快適モード`;
             } catch (e) {
-                updateProgress(0, "エラー: カメラの接続を確認してください。");
-                statusDot.className = "status-dot error";
-                statusText.innerText = "エラー";
+                updateProgress(0, "カメラ起動エラー");
             }
         }
 
+        // カメラ切り替え
         document.getElementById('btn-switch-camera').addEventListener('click', async () => {
-            if (videoDevices.length <= 1) {
-                addLog("切り替え可能な別のカメラが見つかりません。");
-                return;
-            }
+            if (videoDevices.length <= 1) return;
             currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
-            const nextDevice = videoDevices[currentDeviceIndex];
-            addLog(`カメラ切り替え: ${nextDevice.label || 'Camera ' + currentDeviceIndex}`);
-            await startCameraStream(currentCamW, currentCamH, nextDevice.deviceId);
+            await startCameraStream(videoDevices[currentDeviceIndex].deviceId);
         });
 
+        // 背景色
         bgColorInput.addEventListener('input', (e) => {
-            const hex = e.target.value;
-            renderer.setClearColor(new THREE.Color(hex), 1.0);
-            document.body.style.background = hex;
+            renderer.setClearColor(new THREE.Color(e.target.value), 1.0);
+            document.body.style.background = e.target.value;
         });
         document.getElementById('btn-bg-green').addEventListener('click', () => {
             bgColorInput.value = "#00ff00";
@@ -490,42 +442,32 @@
             document.body.style.background = "#1a1a1a";
         });
 
+        // スクショ
         document.getElementById('btn-screenshot').addEventListener('click', () => {
             renderer.render(scene, camera);
-            const dataUrl = canvasElement.toDataURL('image/png');
             const link = document.createElement('a');
-            link.download = `avatar_shot_${Date.now()}.png`;
-            link.href = dataUrl;
+            link.download = `avatar_${Date.now()}.png`;
+            link.href = canvasElement.toDataURL('image/png');
             link.click();
-            addLog("スクリーンショットを保存しました。");
         });
 
+        // 録画
         const recordBtn = document.getElementById('btn-record');
         recordBtn.addEventListener('click', () => {
             if (!isRecording) {
                 recordedChunks = [];
-                const stream = canvasElement.captureStream(30);
-                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
-                
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data && e.data.size > 0) recordedChunks.push(e.data);
-                };
-
+                mediaRecorder = new MediaRecorder(canvasElement.captureStream(30), { mimeType: 'video/webm;codecs=vp9' });
+                mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
                 mediaRecorder.onstop = () => {
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                    const url = URL.createObjectURL(blob);
                     const link = document.createElement('a');
-                    link.download = `avatar_video_${Date.now()}.webm`;
-                    link.href = url;
+                    link.download = `avatar_movie_${Date.now()}.webm`;
+                    link.href = URL.createObjectURL(new Blob(recordedChunks, { type: 'video/webm' }));
                     link.click();
-                    addLog("ビデオファイルを書き出しました。");
                 };
-
                 mediaRecorder.start();
                 isRecording = true;
                 recordBtn.innerText = "⏹️ 録画停止";
                 recordBtn.classList.add('active');
-                addLog("録画を開始しました（UIは除外されます）。");
             } else {
                 mediaRecorder.stop();
                 isRecording = false;
@@ -534,37 +476,18 @@
             }
         });
 
+        // PiP
         document.getElementById('btn-pip').addEventListener('click', async () => {
             try {
                 const pipVideo = document.createElement('video');
                 pipVideo.muted = true;
                 pipVideo.srcObject = canvasElement.captureStream(30);
                 pipVideo.play();
-                
-                pipVideo.addEventListener('loadedmetadata', async () => {
-                    try {
-                        await pipVideo.requestPictureInPicture();
-                        addLog("小窓化(PiP)に成功しました。");
-                    } catch (err) {
-                        addLog("小窓化が拒否されました。", true);
-                    }
-                });
-            } catch (e) {
-                addLog("小窓化に対応していません。", true);
-            }
+                pipVideo.addEventListener('loadedmetadata', async () => { await pipVideo.requestPictureInPicture(); });
+            } catch (e) {}
         });
 
-        document.getElementById('camera-quality-buttons').addEventListener('click', async (e) => {
-            if (e.target.classList.contains('btn') && !e.target.classList.contains('active')) {
-                document.querySelectorAll('#camera-quality-buttons .btn').forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                currentCamW = parseInt(e.target.getAttribute('data-w'));
-                currentCamH = parseInt(e.target.getAttribute('data-h'));
-                const activeDevice = videoDevices[currentDeviceIndex];
-                await startCameraStream(currentCamW, currentCamH, activeDevice?.deviceId);
-            }
-        });
-
+        // トラッキング部位
         document.getElementById('track-target-buttons').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn')) {
                 document.querySelectorAll('#track-target-buttons .btn').forEach(b => b.classList.remove('active'));
@@ -573,6 +496,7 @@
             }
         });
 
+        // 表情
         document.getElementById('expression-buttons').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn')) {
                 document.querySelectorAll('#expression-buttons .btn').forEach(b => b.classList.remove('active'));
@@ -581,6 +505,7 @@
             }
         });
 
+        // ファイルドロップ
         dropZone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => processFile(e.target.files[0]));
         window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background = 'rgba(0, 255, 204, 0.2)'; });
@@ -593,13 +518,8 @@
 
         function processFile(file) {
             if (!file || !file.name.toLowerCase().endsWith('.vrm')) return;
-            addLog(`アバターファイルを解析中...`);
             const reader = new FileReader();
-            reader.onload = (e) => {
-                loadVRM(e.target.result).catch(() => {
-                    addLog(`VRM読み込み失敗`, true);
-                });
-            };
+            reader.onload = (e) => { loadVRM(e.target.result).catch(() => {}); };
             reader.readAsDataURL(file);
         }
 
