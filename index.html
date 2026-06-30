@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>vrm-tracker-lite Ultra</title>
+    <title>vrm-tracker-lite Pro Studio</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: sans-serif; color: white; user-select: none; }
+        body { margin: 0; overflow: hidden; background: #00ff00; font-family: sans-serif; color: white; user-select: none; }
         #canvas { width: 100vw; height: 100vh; display: block; }
         
         #video-container { position: fixed; bottom: 10px; right: 10px; width: 160px; height: 120px; border: 2px solid #555; border-radius: 4px; z-index: 10; background: #000; overflow: hidden; transition: opacity 0.2s; }
@@ -17,6 +17,9 @@
         .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .btn { background: #333; color: white; border: 1px solid #555; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
         .btn:hover, .btn.active { background: #444; border-color: #00ffcc; color: #00ffcc; }
+        .btn-rec { border-color: #ff4444; }
+        .btn-rec.active { background: #ff4444; color: white; border-color: #ff4444; animation: blink 1.5s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         
         .status-item { display: flex; align-items: center; gap: 6px; }
         .status-dot { width: 8px; height: 8px; background: #ff4444; border-radius: 50%; display: inline-block; }
@@ -35,15 +38,18 @@
         #log-panel { height: 80px; background: rgba(0,0,0,0.8); border: 1px solid #444; border-radius: 4px; font-family: monospace; font-size: 10px; color: #00ffcc; padding: 5px; overflow-y: auto; box-sizing: border-box; }
         .log-entry { margin-bottom: 2px; line-height: 1.2; word-break: break-all; }
 
-        /* パーセント表示付きローディング */
-        #loading { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15,15,15,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; transition: opacity 0.4s; }
+        /* 進捗パーセント表示付きローディング画面 */
+        #loading { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15,15,15,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; transition: opacity 0.4s; }
         .spinner { border: 4px solid rgba(255,255,255,0.1); width: 50px; height: 50px; border-radius: 50%; border-left-color: #00ffcc; animation: spin 1s linear infinite; margin-bottom: 20px; }
-        #progress-percent { font-size: 32px; font-weight: bold; color: #00ffcc; font-family: monospace; margin-bottom: 10px; }
+        #progress-percent { font-size: 36px; font-weight: bold; color: #00ffcc; font-family: monospace; margin-bottom: 10px; }
         #loading-text { color: #aaa; font-size: 13px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
         #help-toast { position: fixed; top: 110px; right: 10px; background: rgba(0,0,0,0.8); padding: 10px 15px; border-radius: 6px; font-size: 11px; border: 1px solid #444; pointer-events: none; line-height: 1.5; color: #ccc; }
+        .color-picker-wrapper { display: flex; align-items: center; gap: 4px; }
+        #bg-color-input { width: 22px; height: 18px; border: 1px solid #555; padding: 0; background: none; cursor: pointer; }
     </style>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://unpkg.com/@pixiv/three-vrm@0.6.7/lib/three-vrm.js"></script>
@@ -62,18 +68,30 @@
 
     <div id="taskbar">
         <div class="taskbar-row">
-            <div><strong>vrm-tracker-lite Ultra</strong></div>
-            <div class="controls" id="camera-quality-buttons">
-                <span style="color:#00ffcc;">カメラ認識精度:</span>
-                <button class="btn active" data-w="320" data-h="240">標準 (軽量)</button>
-                <button class="btn" data-w="640" data-h="480">高精度 (推奨)</button>
-                <button class="btn" data-w="1280" data-h="720">超高精度 (重い)</button>
-            </div>
             <div class="controls">
-                <button id="toggle-video" class="btn">カメラ非表示</button>
-                <div class="status-item"><span id="status-dot" class="status-dot"></span><span id="status-text">初期化中</span></div>
+                <strong>vrm-tracker Pro Studio</strong>
+                <button id="btn-switch-camera" class="btn" style="border-color:#00ffcc;">📷 カメラ切替</button>
+                <button id="btn-pip" class="btn">📌 小窓化 (PiP)</button>
+            </div>
+            
+            <div class="controls" id="camera-quality-buttons">
+                <span style="color:#aaa;">精度:</span>
+                <button class="btn active" data-w="320" data-h="240">標準</button>
+                <button class="btn" data-w="640" data-h="480">高精度</button>
+            </div>
+
+            <div class="controls">
+                <span style="color:#aaa;">保存:</span>
+                <button id="btn-screenshot" class="btn">📸 スクショ</button>
+                <button id="btn-record" class="btn btn-rec">🔴 録画開始</button>
+            </div>
+
+            <div class="controls">
+                <button id="toggle-video" class="btn">カメラ枠非表示</button>
+                <div class="status-item"><span id="status-dot" class="status-dot"></span><span id="status-text">準備中</span></div>
             </div>
         </div>
+        
         <div class="taskbar-row" style="border-top: 1px solid #333; padding-top: 4px;">
             <div class="controls" id="track-target-buttons">
                 <span style="color:#aaa;">動かす場所:</span>
@@ -82,12 +100,20 @@
                 <button class="btn" data-target="all">顔＋からだ＋て</button>
             </div>
             <div class="controls" id="expression-buttons">
-                <span style="color:#aaa;">表情変更:</span>
+                <span style="color:#aaa;">表情:</span>
                 <button class="btn active" data-exp="auto">自動</button>
                 <button class="btn" data-exp="happy">喜</button>
                 <button class="btn" data-exp="angry">怒</button>
                 <button class="btn" data-exp="sad">哀</button>
                 <button class="btn" data-exp="relaxed">楽</button>
+            </div>
+            <div class="controls">
+                <span style="color:#aaa;">背景色:</span>
+                <div class="color-picker-wrapper">
+                    <input type="color" id="bg-color-input" value="#00ff00">
+                    <button id="btn-bg-green" class="btn" style="padding:1px 4px; font-size:10px;">緑</button>
+                    <button id="btn-bg-dark" class="btn" style="padding:1px 4px; font-size:10px;">暗</button>
+                </div>
             </div>
         </div>
     </div>
@@ -102,10 +128,7 @@
     </div>
 
     <div id="help-toast">
-        🖱️ <b>アバター操作方法</b><br>
-        ・左ドラッグ：アバターの向き変更（回転）<br>
-        ・右ドラッグ：位置の移動<br>
-        ・ホイール：拡大 / 縮小
+        項目は右ドラッグで移動、左ドラッグで回転、ホイールで拡大縮小できます。
     </div>
 
     <div id="log-container">
@@ -137,6 +160,7 @@
         
         const metaName = document.getElementById('meta-name');
         const metaAuthor = document.getElementById('meta-author');
+        const bgColorInput = document.getElementById('bg-color-input');
 
         let currentVrm = null;
         let dummyVrm = null; 
@@ -147,6 +171,15 @@
         let holistic = null;
         let currentCamW = 320;
         let currentCamH = 240;
+
+        // カメラデバイス切り替え用管理
+        let videoDevices = [];
+        let currentDeviceIndex = 0;
+
+        // 録画用管理
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isRecording = false;
 
         function updateProgress(percent, text) {
             progressPercent.innerText = `${percent}%`;
@@ -163,28 +196,32 @@
             logPanel.scrollTop = logPanel.scrollHeight;
         }
 
-        // Three.js 初期化
+        // 3Dシーン構築
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
         camera.position.set(0.0, 1.4, 0.55);
 
-        const renderer = new THREE.WebGLRenderer({ canvas: canvasElement, antialias: true, alpha: true });
+        // 背景色の反映初期化
+        const initBgColor = new THREE.Color(bgColorInput.value);
+        const renderer = new THREE.WebGLRenderer({ canvas: canvasElement, antialias: true, alpha: false, preserveDrawingBuffer: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.2));
+        renderer.setClearColor(initBgColor, 1.0);
+        document.body.style.background = bgColorInput.value;
 
         const light = new THREE.DirectionalLight(0xffffff, 1.0);
         light.position.set(1.0, 1.0, 1.0).normalize();
         scene.add(light);
         scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-        // ★ バーの代わりにカメラ側（視点）をドラッグ操作できるように拡張
+        // マウスコントロール（ドラッグ移動・回転・拡大）
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.target.set(0.0, 1.4, 0.0);
         controls.enableDamping = true;
         controls.dampingFactor = 0.1;
-        controls.screenSpacePanning = true; // 右ドラッグで平行移動を可能にする
+        controls.screenSpacePanning = true; 
 
-        // ロボット生成
+        // 初期の仮のロボットを配置
         function createDummyAvatar() {
             const group = new THREE.Group();
             const bodyMat = new THREE.MeshStandardMaterial({ color: 0x444446, roughness: 0.4 });
@@ -204,16 +241,16 @@
 
             group.add(headGroup);
             scene.add(group);
-
             dummyVrm = { scene: group, head: headGroup, update: () => {} };
         }
         createDummyAvatar();
 
+        // ループ
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
-            controls.update(); // ドラッグ操作の更新
+            controls.update(); 
             if (currentVrm) { currentVrm.update(delta); }
             renderer.render(scene, camera);
         }
@@ -227,7 +264,7 @@
             }
         }
 
-        // VRM読み込み
+        // VRMの読み込みとポーズの初期化（腕をしっかり下ろす補正）
         function loadVRM(url) {
             return new Promise((resolve, reject) => {
                 try {
@@ -247,6 +284,16 @@
                             currentVrm = vrm;
                             scene.add(vrm.scene);
 
+                            // ★ここでお部屋に入った最初の瞬間に手を下ろした前向き（Aポーズ等）にがっちり固定
+                            const humanoid = vrm.humanoid;
+                            if (humanoid) {
+                                // 左右の肩・腕・ひじの回転を自然に下ろした状態(Z軸方向に斜め下)に初期化
+                                const leftUpperArm = humanoid.getBoneNode('leftUpperArm');
+                                const rightUpperArm = humanoid.getBoneNode('rightUpperArm');
+                                if (leftUpperArm) leftUpperArm.rotation.set(0, 0, 1.2); 
+                                if (rightUpperArm) rightUpperArm.rotation.set(0, 0, -1.2);
+                            }
+
                             const head = vrm.humanoid?.getBoneNode('head');
                             if(head) {
                                 const headWorldPos = new THREE.Vector3();
@@ -264,12 +311,12 @@
             });
         }
 
-        // トラッキング初期化システム
+        // 全体の初期化
         async function initializeSystem() {
             loadingElement.style.display = 'flex';
             loadingElement.style.opacity = '1';
             
-            updateProgress(10, "AIエンジンを読み込み中...");
+            updateProgress(15, "AIトラッキングライブラリを待機中...");
             holistic = new Holistic({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
             });
@@ -282,7 +329,16 @@
                 minTrackingConfidence: 0.5
             });
 
-            updateProgress(40, "AIトラッキングのイベント設定中...");
+            updateProgress(40, "利用可能なカメラを検索中...");
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                videoDevices = devices.filter(d => d.kind === 'videoinput');
+                addLog(`見つかったカメラ数: ${videoDevices.length}`);
+            } catch (e) {
+                addLog("カメラ一覧の取得に失敗しました", true);
+            }
+
+            updateProgress(60, "骨組み追従エンジンの紐付け中...");
             holistic.onResults((results) => {
                 if (overlayCanvas.width !== videoElement.videoWidth) {
                     overlayCanvas.width = videoElement.videoWidth;
@@ -303,6 +359,7 @@
                 if (currentVrm) {
                     const humanoid = currentVrm.humanoid;
                     
+                    // 顔の同期
                     if (riggedFace) {
                         const head = humanoid?.getBoneNode('head');
                         const neck = humanoid?.getBoneNode('neck');
@@ -323,6 +380,7 @@
                         }
                     }
 
+                    // からだの同期 (基本は手を下げておく)
                     if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose) {
                         const spine = humanoid?.getBoneNode('spine');
                         const chest = humanoid?.getBoneNode('chest');
@@ -339,6 +397,7 @@
                         if (lowerArmR) lowerArmR.rotation.set(riggedPose.rightLowerArm.x, riggedPose.rightLowerArm.y, riggedPose.rightLowerArm.z);
                     }
 
+                    // ての同期
                     if (trackingTarget === "all") {
                         if (riggedLeftHand) {
                             const handL = humanoid?.getBoneNode('leftHand');
@@ -367,52 +426,152 @@
             await startCameraStream(currentCamW, currentCamH);
         }
 
-        // カメラストリームの起動
-        async function startCameraStream(width, height) {
-            updateProgress(70, `カメラデバイス (${width}x${height}) を起動中...`);
-            
-            if (cameraUtils) {
-                await cameraUtils.stop();
-            }
+        // カメラ起動ストリーム
+        async function startCameraStream(width, height, deviceId = null) {
+            updateProgress(80, "カメラを同期してキャプチャを開始中...");
+            if (cameraUtils) { await cameraUtils.stop(); }
+
+            const constraints = {
+                video: deviceId ? { deviceId: { exact: deviceId }, width: width, height: height } : { width: width, height: height }
+            };
 
             cameraUtils = new Camera(videoElement, {
                 onFrame: async () => { await holistic.send({ image: videoElement }); },
                 width: width,
-                height: height
+                height: height,
+                deviceId: deviceId
             });
 
             try {
                 await cameraUtils.start();
-                updateProgress(100, "システム構築が完了しました！");
+                updateProgress(100, "準備が完了しました！");
                 setTimeout(() => {
                     loadingElement.style.opacity = '0';
                     setTimeout(() => loadingElement.style.display = 'none', 400);
                 }, 500);
-                
                 statusDot.className = "status-dot active";
-                statusText.innerText = `認識中 (${width}x${height})`;
+                statusText.innerText = `認識中`;
             } catch (e) {
-                updateProgress(0, "エラー: カメラの起動に失敗しました。");
+                updateProgress(0, "エラー: カメラの接続を確認してください。");
                 statusDot.className = "status-dot error";
-                statusText.innerText = "カメラブロックエラー";
+                statusText.innerText = "エラー";
             }
         }
 
-        // カメラ精度（解像度）の切り替え処理
+        // 前面後面等のカメラ切り替え処理
+        document.getElementById('btn-switch-camera').addEventListener('click', async () => {
+            if (videoDevices.length <= 1) {
+                addLog("切り替え可能な別のカメラが見つかりません。");
+                return;
+            }
+            currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+            const nextDevice = videoDevices[currentDeviceIndex];
+            addLog(`カメラを切り替えます: ${nextDevice.label || 'Camera ' + currentDeviceIndex}`);
+            await startCameraStream(currentCamW, currentCamH, nextDevice.deviceId);
+        });
+
+        // 背景色の変更処理
+        bgColorInput.addEventListener('input', (e) => {
+            const hex = e.target.value;
+            renderer.setClearColor(new THREE.Color(hex), 1.0);
+            document.body.style.background = hex;
+        });
+        document.getElementById('btn-bg-green').addEventListener('click', () => {
+            bgColorInput.value = "#00ff00";
+            renderer.setClearColor(new THREE.Color("#00ff00"), 1.0);
+            document.body.style.background = "#00ff00";
+        });
+        document.getElementById('btn-bg-dark').addEventListener('click', () => {
+            bgColorInput.value = "#1a1a1a";
+            renderer.setClearColor(new THREE.Color("#1a1a1a"), 1.0);
+            document.body.style.background = "#1a1a1a";
+        });
+
+        // 📸 スクショ機能（バーなどは一切含まれずアバターと背景のみが写る）
+        document.getElementById('btn-screenshot').addEventListener('click', () => {
+            // レンダラーに現在の1フレームを描画させ、その場で画像データ化
+            renderer.render(scene, camera);
+            const dataUrl = canvasElement.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = `avatar_shot_${Date.now()}.png`;
+            link.href = dataUrl;
+            link.click();
+            addLog("スクリーンショットを保存しました。");
+        });
+
+        // 🔴 録画機能（バーなどは一切含まれずアバターと背景のみが写る）
+        const recordBtn = document.getElementById('btn-record');
+        recordBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                // アバター描画用Canvasストリームから録画オブジェクトを作成
+                recordedChunks = [];
+                const stream = canvasElement.captureStream(30); // 30fps固定
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+                
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.dataMerged || e.data.size > 0) {
+                        recordedChunks.push(e.data);
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.download = `avatar_video_${Date.now()}.webm`;
+                    link.href = url;
+                    link.click();
+                    addLog("ビデオ録画をファイルとして出力しました。");
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                recordBtn.innerText = "⏹️ 録画停止";
+                recordBtn.classList.add('active');
+                addLog("アバター画面の録画を開始しました（バー等は含まれません）。");
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                recordBtn.innerText = "🔴 録画開始";
+                recordBtn.classList.remove('active');
+            }
+        });
+
+        // ピクチャーインピクチャー (PiP) の切り替え
+        document.getElementById('btn-pip').addEventListener('click', async () => {
+            try {
+                // Canvasを隠しビデオ要素を通してピクチャーインピクチャー化
+                const pipVideo = document.createElement('video');
+                pipVideo.muted = true;
+                pipVideo.srcObject = canvasElement.captureStream(30);
+                pipVideo.play();
+                
+                pipVideo.addEventListener('loadedmetadata', async () => {
+                    try {
+                        await pipVideo.requestPictureInPicture();
+                        addLog("ピクチャーインピクチャーの小窓化に成功しました。");
+                    } catch (err) {
+                        addLog("小窓化リクエストが拒否されました。", true);
+                    }
+                });
+            } catch (e) {
+                addLog("このブラウザはPiP小窓化に対応していません。", true);
+            }
+        });
+
+        // 解像度変更
         document.getElementById('camera-quality-buttons').addEventListener('click', async (e) => {
             if (e.target.classList.contains('btn') && !e.target.classList.contains('active')) {
                 document.querySelectorAll('#camera-quality-buttons .btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
-                
                 currentCamW = parseInt(e.target.getAttribute('data-w'));
                 currentCamH = parseInt(e.target.getAttribute('data-h'));
-                
-                addLog(`カメラ精度変更リクエスト: ${currentCamW}x${currentCamH}`);
-                await startCameraStream(currentCamW, currentCamH);
+                const activeDevice = videoDevices[currentDeviceIndex];
+                await startCameraStream(currentCamW, currentCamH, activeDevice?.deviceId);
             }
         });
 
-        // 動かす場所切り替え
+        // 動かす場所
         document.getElementById('track-target-buttons').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn')) {
                 document.querySelectorAll('#track-target-buttons .btn').forEach(b => b.classList.remove('active'));
@@ -421,7 +580,7 @@
             }
         });
 
-        // 表情切り替え
+        // 表情
         document.getElementById('expression-buttons').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn')) {
                 document.querySelectorAll('#expression-buttons .btn').forEach(b => b.classList.remove('active'));
@@ -430,7 +589,7 @@
             }
         });
 
-        // ファイル処理
+        // ファイル入力
         dropZone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => processFile(e.target.files[0]));
         window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background = 'rgba(0, 255, 204, 0.2)'; });
@@ -443,11 +602,11 @@
 
         function processFile(file) {
             if (!file || !file.name.toLowerCase().endsWith('.vrm')) return;
-            addLog(`ファイル読み込み中: ${file.name}`);
+            addLog(`モデル解析中...`);
             const reader = new FileReader();
             reader.onload = (e) => {
-                loadVRM(e.target.result).catch(err => {
-                    addLog(`構築失敗: ${err.code}`, true);
+                loadVRM(e.target.result).catch(() => {
+                    addLog(`VRM読み込みエラー`, true);
                 });
             };
             reader.readAsDataURL(file);
@@ -464,6 +623,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
+        // 開始
         initializeSystem();
     </script>
 </body>
