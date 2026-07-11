@@ -350,26 +350,22 @@
                     document.getElementById('meta-name').innerText = meta.title || "不明なアバター";
                     document.getElementById('meta-author').innerText = meta.author || "不明な制作者";
 
-                    // ★【二頭身化】アップロードされた独自VRMも自動で可愛い二頭身比率にデフォルメ
+                    // ★【修正】アップロードした独自VRMは二頭身化しない（ユーザー希望）。
+                    // また、ボーンをscale()で拡大縮小するとスキニングされたメッシュが
+                    // ねじれる/歪む原因になっていたため、変形処理自体を撤去。
+                    // Aポーズ初期化のみ行う。
                     if (vrm.humanoid) {
-                        const hNode = vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Head);
-                        const hipsNode = vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Hips);
-                        if (hNode) hNode.scale.set(1.6, 1.6, 1.6); // 頭を大きく
-                        if (hipsNode) hipsNode.scale.set(0.7, 0.6, 0.7); // 体をコンパクトに
-                        
-                        // Aポーズ初期化
-                        if(vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftUpperArm))
-                            vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftUpperArm).rotation.z = -0.7;
-                        if(vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightUpperArm))
-                            vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightUpperArm).rotation.z = 0.7;
+                        const lua = vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftUpperArm);
+                        const rua = vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightUpperArm);
+                        if (lua) lua.rotation.z = -0.7;
+                        if (rua) rua.rotation.z = 0.7;
                     }
 
-                    // カメラ位置調整
-                    // ★【修正】初期位置が近すぎたため少し後ろに下げる
-                    controls.target.set(0.0, 0.95, 0.0); 
-                    camera.position.set(0.0, 1.1, 1.4);
+                    // カメラ位置調整（等身大モデルなので少し引いて全身が入るように）
+                    controls.target.set(0.0, 1.0, 0.0); 
+                    camera.position.set(0.0, 1.2, 2.0);
 
-                    addAppLog(`独自VRM [${meta.title || 'Model'}] を二頭身モードで読み込みました。`);
+                    addAppLog(`独自VRM [${meta.title || 'Model'}] を読み込みました。`);
 
                     loadingElement.style.opacity = '0';
                     setTimeout(() => loadingElement.style.display = 'none', 400);
@@ -554,18 +550,21 @@
                         const lla = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftLowerArm);
                         const rla = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightLowerArm);
 
-                        // ★【修正】T字→A字：ここも同様に開き角を0.4→0.7に拡大
+                        // ★【修正】T字→A字：開き角を0.4→0.7に拡大
+                        // ★【修正】右側だけY/Zを反転していたため左右で回転方向が食い違い、
+                        // 腕や手が「ねじれる」ように見えるバグがあった。KalidokitはL/Rそれぞれの
+                        // 座標系で正しい符号を返すため、左右対称に同じ式を適用するよう修正。
                         if (lua && riggedPose.LeftUpperArm) lua.rotation.set(riggedPose.LeftUpperArm.x, riggedPose.LeftUpperArm.y, riggedPose.LeftUpperArm.z - 0.7);
-                        if (rua && riggedPose.RightUpperArm) rua.rotation.set(riggedPose.RightUpperArm.x, -riggedPose.RightUpperArm.y, -riggedPose.RightUpperArm.z + 0.7);
+                        if (rua && riggedPose.RightUpperArm) rua.rotation.set(riggedPose.RightUpperArm.x, riggedPose.RightUpperArm.y, riggedPose.RightUpperArm.z + 0.7);
                         if (lla && riggedPose.LeftLowerArm) lla.rotation.set(riggedPose.LeftLowerArm.x, riggedPose.LeftLowerArm.y, riggedPose.LeftLowerArm.z);
-                        if (rla && riggedPose.RightLowerArm) rla.rotation.set(riggedPose.RightLowerArm.x, -riggedPose.RightLowerArm.y, -riggedPose.RightLowerArm.z);
+                        if (rla && riggedPose.RightLowerArm) rla.rotation.set(riggedPose.RightLowerArm.x, riggedPose.RightLowerArm.y, riggedPose.RightLowerArm.z);
                     }
 
                     if (trackingTarget === "all") {
                         const lh = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftHand);
                         const rh = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightHand);
                         if (lh && riggedLeftHand?.LeftWrist) lh.rotation.set(riggedLeftHand.LeftWrist.x, riggedLeftHand.LeftWrist.y, riggedLeftHand.LeftWrist.z);
-                        if (rh && riggedRightHand?.RightWrist) rh.rotation.set(riggedRightHand.RightWrist.x, -riggedRightHand.RightWrist.y, -riggedRightHand.RightWrist.z);
+                        if (rh && riggedRightHand?.RightWrist) rh.rotation.set(riggedRightHand.RightWrist.x, riggedRightHand.RightWrist.y, riggedRightHand.RightWrist.z);
                     }
                 } catch(err) {
                     addAppLog(`トラッキング同期エラーを自動回避しました: ${err.message}`);
@@ -775,11 +774,14 @@
                 addAppLog(`表情を [${currentExpression}] に固定しました。`);
                 
                 if (!isOfficialAvatar && currentVrm && currentVrm.blendShapeProxy) {
+                    // ★【修正】VRM 0.x の表情プリセットには"Surprised"は存在せず、
+                    // 常にundefinedを渡していたため「驚き」ボタンが無反応だった。
+                    // 近い表現として標準プリセットの"Fun"を使用する。
                     const bp = currentVrm.blendShapeProxy;
-                    bp.setValue(THREE.VRMSchema.BlendShapePresetName.Surprised, 0);
+                    bp.setValue(THREE.VRMSchema.BlendShapePresetName.Fun, 0);
                     bp.setValue(THREE.VRMSchema.BlendShapePresetName.Angry, 0);
                     
-                    if (currentExpression === "surprised") bp.setValue(THREE.VRMSchema.BlendShapePresetName.Surprised, 1.0);
+                    if (currentExpression === "surprised") bp.setValue(THREE.VRMSchema.BlendShapePresetName.Fun, 1.0);
                     if (currentExpression === "angry") bp.setValue(THREE.VRMSchema.BlendShapePresetName.Angry, 1.0);
                 }
             }
