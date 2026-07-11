@@ -165,6 +165,14 @@
         let isRecording = false;
         let trackingTarget = "body"; 
 
+        // ★【修正】まれにトラッキングが乱れた際に首や頭が異常な角度まで
+        // 一瞬で振り切れてしまう「首がすごい向きに曲がる」バグ対策。
+        // 角度を安全な範囲にクランプしてから適用する。
+        function clampAngle(v, limit) {
+            if (typeof v !== 'number' || !isFinite(v)) return 0;
+            return Math.max(-limit, Math.min(limit, v));
+        }
+
         // ★【修正】ログを復活させて画面上に表示する処理
         function addAppLog(text) {
             const logBox = document.getElementById('log-content');
@@ -294,8 +302,8 @@
 
             scene.add(officialAvatarGroup);
 
-            leftUpperArm.rotation.z = -0.4;
-            rightUpperArm.rotation.z = 0.4;
+            leftUpperArm.rotation.z = -0.7;
+            rightUpperArm.rotation.z = 0.7;
 
             robotNodes.spine = spineNode;
             robotNodes.chest = chestNode;
@@ -313,8 +321,9 @@
             document.getElementById('meta-author').innerText = "vrm-tracker-lite";
             
             // カメラ注視点をちびロボサイズ（全高約0.55）にアジャスト
-            controls.target.set(0.0, 0.32, 0.0); 
-            camera.position.set(0.0, 0.38, 0.55);
+            // ★【修正】初期位置が近すぎたため少し後ろに下げる
+            controls.target.set(0.0, 0.33, 0.0); 
+            camera.position.set(0.0, 0.42, 0.85);
             addAppLog("初期ロボットキャラを二頭身スタイルで生成しました。");
         }
 
@@ -350,14 +359,15 @@
                         
                         // Aポーズ初期化
                         if(vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftUpperArm))
-                            vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftUpperArm).rotation.z = -0.4;
+                            vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftUpperArm).rotation.z = -0.7;
                         if(vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightUpperArm))
-                            vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightUpperArm).rotation.z = 0.4;
+                            vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightUpperArm).rotation.z = 0.7;
                     }
 
                     // カメラ位置調整
+                    // ★【修正】初期位置が近すぎたため少し後ろに下げる
                     controls.target.set(0.0, 0.95, 0.0); 
-                    camera.position.set(0.0, 1.05, 0.9);
+                    camera.position.set(0.0, 1.1, 1.4);
 
                     addAppLog(`独自VRM [${meta.title || 'Model'}] を二頭身モードで読み込みました。`);
 
@@ -473,20 +483,33 @@
             } catch(e) {}
 
             if (isOfficialAvatar) {
-                if (riggedFace) {
-                    robotNodes.head.rotation.set(-riggedFace.head.x * 0.8, -riggedFace.head.y, -riggedFace.head.z);
-                    robotNodes.neck.rotation.set(-riggedFace.head.x * 0.2, -riggedFace.head.y * 0.2, 0);
-                }
-                if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose) {
-                    robotNodes.spine.rotation.set(-riggedPose.spine.x, -riggedPose.spine.y, -riggedPose.spine.z);
-                    if (riggedPose.leftUpperArm) robotNodes.leftUpperArm.rotation.set(riggedPose.leftUpperArm.x, riggedPose.leftUpperArm.y, riggedPose.leftUpperArm.z - 0.4);
-                    if (riggedPose.rightUpperArm) robotNodes.rightUpperArm.rotation.set(riggedPose.rightUpperArm.x, riggedPose.rightUpperArm.y, riggedPose.rightUpperArm.z + 0.4);
-                    if (riggedPose.leftLowerArm) robotNodes.leftLowerArm.rotation.set(riggedPose.leftLowerArm.x, riggedPose.leftLowerArm.y, riggedPose.leftLowerArm.z);
-                    if (riggedPose.rightLowerArm) robotNodes.rightLowerArm.rotation.set(riggedPose.rightLowerArm.x, riggedPose.rightLowerArm.y, riggedPose.rightLowerArm.z);
-                }
-                if (trackingTarget === "all") {
-                    if (riggedLeftHand && riggedLeftHand.leftWrist) robotNodes.leftHand.rotation.set(riggedLeftHand.leftWrist.x, riggedLeftHand.leftWrist.y, riggedLeftHand.leftWrist.z);
-                    if (riggedRightHand && riggedRightHand.rightWrist) robotNodes.rightHand.rotation.set(riggedRightHand.rightWrist.x, riggedRightHand.rightWrist.y, riggedRightHand.rightWrist.z);
+                try {
+                    if (riggedFace) {
+                        const hx = clampAngle(riggedFace.head.x, 0.6);
+                        const hy = clampAngle(riggedFace.head.y, 0.6);
+                        const hz = clampAngle(riggedFace.head.z, 0.6);
+                        robotNodes.head.rotation.set(-hx * 0.8, -hy, -hz);
+                        robotNodes.neck.rotation.set(-hx * 0.2, -hy * 0.2, 0);
+                    }
+                    if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose && riggedPose.Spine) {
+                        robotNodes.spine.rotation.set(
+                            -clampAngle(riggedPose.Spine.x, 0.6),
+                            -clampAngle(riggedPose.Spine.y, 0.6),
+                            -clampAngle(riggedPose.Spine.z, 0.6)
+                        );
+                        // ★【修正】T字→A字：初期の腕の下げ角(0.4)は控えめすぎて
+                        // T字に近く見えていたため、開き角をより自然なA字ポーズへ拡大(0.7)
+                        if (riggedPose.LeftUpperArm) robotNodes.leftUpperArm.rotation.set(riggedPose.LeftUpperArm.x, riggedPose.LeftUpperArm.y, riggedPose.LeftUpperArm.z - 0.7);
+                        if (riggedPose.RightUpperArm) robotNodes.rightUpperArm.rotation.set(riggedPose.RightUpperArm.x, riggedPose.RightUpperArm.y, riggedPose.RightUpperArm.z + 0.7);
+                        if (riggedPose.LeftLowerArm) robotNodes.leftLowerArm.rotation.set(riggedPose.LeftLowerArm.x, riggedPose.LeftLowerArm.y, riggedPose.LeftLowerArm.z);
+                        if (riggedPose.RightLowerArm) robotNodes.rightLowerArm.rotation.set(riggedPose.RightLowerArm.x, riggedPose.RightLowerArm.y, riggedPose.RightLowerArm.z);
+                    }
+                    if (trackingTarget === "all") {
+                        if (riggedLeftHand && riggedLeftHand.LeftWrist) robotNodes.leftHand.rotation.set(riggedLeftHand.LeftWrist.x, riggedLeftHand.LeftWrist.y, riggedLeftHand.LeftWrist.z);
+                        if (riggedRightHand && riggedRightHand.RightWrist) robotNodes.rightHand.rotation.set(riggedRightHand.RightWrist.x, riggedRightHand.RightWrist.y, riggedRightHand.RightWrist.z);
+                    }
+                } catch (err) {
+                    addAppLog(`トラッキング同期エラーを自動回避しました: ${err.message}`);
                 }
             } else if (currentVrm && currentVrm.humanoid) {
                 // ★【独自VRMが動かないバグの完全修正】
@@ -498,43 +521,51 @@
                     if (riggedFace) {
                         const headBone = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Head);
                         const neckBone = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Neck);
-                        if (headBone) headBone.rotation.set(-riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
-                        if (neckBone) neckBone.rotation.set(-riggedFace.head.x * 0.2, riggedFace.head.y * 0.2, 0);
+                        const hx = clampAngle(riggedFace.head.x, 0.6);
+                        const hy = clampAngle(riggedFace.head.y, 0.6);
+                        const hz = clampAngle(riggedFace.head.z, 0.6);
+                        if (headBone) headBone.rotation.set(-hx, hy, hz);
+                        if (neckBone) neckBone.rotation.set(-hx * 0.2, hy * 0.2, 0);
                         
                         const blendShape = currentVrm.blendShapeProxy;
                         if (blendShape) {
                             if (currentExpression === "auto") {
-                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.BlinkLeft, riggedFace.eye.l || 0);
-                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.BlinkRight, riggedFace.eye.r || 0);
-                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.A, riggedFace.mouth.shape.y || 0);
+                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.BlinkL, riggedFace.eye.l || 0);
+                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.BlinkR, riggedFace.eye.r || 0);
+                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.A, riggedFace.mouth.shape.A || 0);
                             } else {
-                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.BlinkLeft, 0);
-                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.BlinkRight, 0);
+                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.BlinkL, 0);
+                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.BlinkR, 0);
                                 blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.A, 0);
                             }
                         }
                     }
 
-                    if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose) {
+                    if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose && riggedPose.Spine) {
                         const spineBone = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Spine);
-                        if (spineBone) spineBone.rotation.set(-riggedPose.spine.x, riggedPose.spine.y, riggedPose.spine.z);
+                        if (spineBone) spineBone.rotation.set(
+                            -clampAngle(riggedPose.Spine.x, 0.6),
+                            clampAngle(riggedPose.Spine.y, 0.6),
+                            clampAngle(riggedPose.Spine.z, 0.6)
+                        );
                         
                         const lua = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftUpperArm);
                         const rua = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightUpperArm);
                         const lla = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftLowerArm);
                         const rla = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightLowerArm);
 
-                        if (lua && riggedPose.leftUpperArm) lua.rotation.set(riggedPose.leftUpperArm.x, riggedPose.leftUpperArm.y, riggedPose.leftUpperArm.z - 0.4);
-                        if (rua && riggedPose.rightUpperArm) rua.rotation.set(riggedPose.rightUpperArm.x, -riggedPose.rightUpperArm.y, -riggedPose.rightUpperArm.z + 0.4);
-                        if (lla && riggedPose.leftLowerArm) lla.rotation.set(riggedPose.leftLowerArm.x, riggedPose.leftLowerArm.y, riggedPose.leftLowerArm.z);
-                        if (rla && riggedPose.rightLowerArm) rla.rotation.set(riggedPose.rightLowerArm.x, -riggedPose.rightLowerArm.y, -riggedPose.rightLowerArm.z);
+                        // ★【修正】T字→A字：ここも同様に開き角を0.4→0.7に拡大
+                        if (lua && riggedPose.LeftUpperArm) lua.rotation.set(riggedPose.LeftUpperArm.x, riggedPose.LeftUpperArm.y, riggedPose.LeftUpperArm.z - 0.7);
+                        if (rua && riggedPose.RightUpperArm) rua.rotation.set(riggedPose.RightUpperArm.x, -riggedPose.RightUpperArm.y, -riggedPose.RightUpperArm.z + 0.7);
+                        if (lla && riggedPose.LeftLowerArm) lla.rotation.set(riggedPose.LeftLowerArm.x, riggedPose.LeftLowerArm.y, riggedPose.LeftLowerArm.z);
+                        if (rla && riggedPose.RightLowerArm) rla.rotation.set(riggedPose.RightLowerArm.x, -riggedPose.RightLowerArm.y, -riggedPose.RightLowerArm.z);
                     }
 
                     if (trackingTarget === "all") {
                         const lh = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftHand);
                         const rh = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightHand);
-                        if (lh && riggedLeftHand?.leftWrist) lh.rotation.set(riggedLeftHand.leftWrist.x, riggedLeftHand.leftWrist.y, riggedLeftHand.leftWrist.z);
-                        if (rh && riggedRightHand?.rightWrist) rh.rotation.set(riggedRightHand.rightWrist.x, -riggedRightHand.rightWrist.y, -riggedRightHand.rightWrist.z);
+                        if (lh && riggedLeftHand?.LeftWrist) lh.rotation.set(riggedLeftHand.LeftWrist.x, riggedLeftHand.LeftWrist.y, riggedLeftHand.LeftWrist.z);
+                        if (rh && riggedRightHand?.RightWrist) rh.rotation.set(riggedRightHand.RightWrist.x, -riggedRightHand.RightWrist.y, -riggedRightHand.RightWrist.z);
                     }
                 } catch(err) {
                     addAppLog(`トラッキング同期エラーを自動回避しました: ${err.message}`);
