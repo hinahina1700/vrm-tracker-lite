@@ -219,65 +219,66 @@
             const visorMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, emissive: 0x004433 });
             const handMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc });
 
-            // ★【修正】初期のロボットキャラが「こわい」ため、パーツ位置やサイズをデフォルメ（二頭身化）
-            const spineNode = new THREE.Group(); spineNode.position.set(0, 0.6, 0); // 全体高さを下げる
-            const chestNode = new THREE.Group(); chestNode.position.set(0, 0.1, 0); // 胴体を短く
-            const neckNode = new THREE.Group();  neckNode.position.set(0, 0.08, 0);
-            const headNode = new THREE.Group();  headNode.position.set(0, 0.04, 0);
+            // ★【修正】頭身バランスを再設計し、きちんとした「二頭身」（頭1個分＝からだ1個分）に調整
+            // head height(0.26) : body height(足〜首まで ≒ 0.28) がほぼ1:1になるよう各パーツを短縮
+            const spineNode = new THREE.Group(); spineNode.position.set(0, 0.12, 0);  // 足の高さ
+            const chestNode = new THREE.Group(); chestNode.position.set(0, 0.03, 0);  // 背骨の高さ
+            const neckNode = new THREE.Group();  neckNode.position.set(0, 0.11, 0);   // 胴の高さ
+            const headNode = new THREE.Group();  headNode.position.set(0, 0.03, 0);   // 首の高さ
 
-            const leftUpperArm = new THREE.Group(); leftUpperArm.position.set(0.12, 0.06, 0);
-            const leftLowerArm = new THREE.Group(); leftLowerArm.position.set(0.08, 0, 0);
-            const leftHand = new THREE.Group();     leftHand.position.set(0.06, 0, 0);
+            const leftUpperArm = new THREE.Group(); leftUpperArm.position.set(0.13, 0.075, 0);
+            const leftLowerArm = new THREE.Group(); leftLowerArm.position.set(0.075, 0, 0);
+            const leftHand = new THREE.Group();     leftHand.position.set(0.05, 0, 0);
 
-            const rightUpperArm = new THREE.Group(); rightUpperArm.position.set(-0.12, 0.06, 0);
-            const rightLowerArm = new THREE.Group(); rightLowerArm.position.set(-0.08, 0, 0);
-            const rightHand = new THREE.Group();     rightHand.position.set(-0.06, 0, 0);
+            const rightUpperArm = new THREE.Group(); rightUpperArm.position.set(-0.13, 0.075, 0);
+            const rightLowerArm = new THREE.Group(); rightLowerArm.position.set(-0.075, 0, 0);
+            const rightHand = new THREE.Group();     rightHand.position.set(-0.05, 0, 0);
 
-            // 土台・足をコンパクトに
-            const baseMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.06, 0.6, 16), bodyMat);
-            baseMesh.position.y = 0.3;
+            // 足を短くコンパクトに（ここが長すぎると二頭身に見えなかった）
+            const baseMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.12, 16), bodyMat);
+            baseMesh.position.y = 0.06;
             officialAvatarGroup.add(baseMesh);
 
-            const spineMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.03, 0.1, 16), jointMat);
-            spineMesh.position.y = 0.05;
+            const spineMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.03, 16), jointMat);
+            spineMesh.position.y = 0.015;
             spineNode.add(spineMesh);
 
-            // 胴体をちいさくデフォルメ
-            const chestMesh = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.12), bodyMat);
-            chestMesh.position.y = 0.06;
+            // 胴体もまるっと小さく
+            const chestMesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.11, 0.15), bodyMat);
+            chestMesh.position.y = 0.055;
             chestNode.add(chestMesh);
 
-            const neckMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.04, 12), jointMat);
-            neckMesh.position.y = 0.02;
+            const neckMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.03, 12), jointMat);
+            neckMesh.position.y = 0.015;
             neckNode.add(neckMesh);
 
-            // ★【二頭身化】顔をめちゃくちゃ大きくして可愛い等身バランスに変更
-            const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.22, 0.22), bodyMat);
-            headMesh.position.y = 0.11;
+            // 頭は胴とほぼ同じ高さまで拡大し、丸みを持たせて「かわいい二頭身」に
+            const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.26, 0.26), bodyMat);
+            headMesh.position.y = 0.13;
             headNode.add(headMesh);
-            
-            // バイザーも合わせてコミカルに拡大
-            const visor = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.05, 0.02), visorMat);
-            visor.position.set(0, 0.11, 0.105);
+
+            // バイザーも頭の大きさに合わせて調整、少し丸顔に見えるよう幅広に
+            const visor = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.055, 0.02), visorMat);
+            visor.position.set(0, 0.14, 0.125);
             headNode.add(visor);
 
-            // 手足を短くちんちくりんに変更
-            const luaMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.018, 0.08, 12), bodyMat);
-            luaMesh.rotation.z = -Math.PI / 2; luaMesh.position.x = 0.04;
+            // 手足はさらに短く・丸く、ちんまりした印象に
+            const luaMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.018, 0.07, 12), bodyMat);
+            luaMesh.rotation.z = -Math.PI / 2; luaMesh.position.x = 0.035;
             leftUpperArm.add(luaMesh);
-            const llaMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.015, 0.06, 12), bodyMat);
-            llaMesh.rotation.z = -Math.PI / 2; llaMesh.position.x = 0.03;
+            const llaMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.015, 0.05, 12), bodyMat);
+            llaMesh.rotation.z = -Math.PI / 2; llaMesh.position.x = 0.025;
             leftLowerArm.add(llaMesh);
-            const lhMesh = new THREE.Mesh(new THREE.SphereGeometry(0.018, 12, 12), handMat);
+            const lhMesh = new THREE.Mesh(new THREE.SphereGeometry(0.02, 12, 12), handMat);
             leftHand.add(lhMesh);
 
-            const ruaMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.018, 0.08, 12), bodyMat);
-            ruaMesh.rotation.z = Math.PI / 2; ruaMesh.position.x = -0.04;
+            const ruaMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.018, 0.07, 12), bodyMat);
+            ruaMesh.rotation.z = Math.PI / 2; ruaMesh.position.x = -0.035;
             rightUpperArm.add(ruaMesh);
-            const rlaMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.015, 0.06, 12), bodyMat);
-            rlaMesh.rotation.z = Math.PI / 2; rlaMesh.position.x = -0.03;
+            const rlaMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.015, 0.05, 12), bodyMat);
+            rlaMesh.rotation.z = Math.PI / 2; rlaMesh.position.x = -0.025;
             rightLowerArm.add(rlaMesh);
-            const rhMesh = new THREE.Mesh(new THREE.SphereGeometry(0.018, 12, 12), handMat);
+            const rhMesh = new THREE.Mesh(new THREE.SphereGeometry(0.02, 12, 12), handMat);
             rightHand.add(rhMesh);
 
             officialAvatarGroup.add(spineNode);
@@ -311,9 +312,9 @@
             document.getElementById('meta-name').innerText = "ライト・ロボ (Chibi-Robo)";
             document.getElementById('meta-author').innerText = "vrm-tracker-lite";
             
-            // カメラ注視点をちびロボサイズにアジャスト
-            controls.target.set(0.0, 0.85, 0.0); 
-            camera.position.set(0.0, 0.95, 0.8);
+            // カメラ注視点をちびロボサイズ（全高約0.55）にアジャスト
+            controls.target.set(0.0, 0.32, 0.0); 
+            camera.position.set(0.0, 0.38, 0.55);
             addAppLog("初期ロボットキャラを二頭身スタイルで生成しました。");
         }
 
@@ -342,16 +343,16 @@
 
                     // ★【二頭身化】アップロードされた独自VRMも自動で可愛い二頭身比率にデフォルメ
                     if (vrm.humanoid) {
-                        const hNode = vrm.humanoid.getBoneNode(THREE.VRMHumanoidBoneName.Head);
-                        const hipsNode = vrm.humanoid.getBoneNode(THREE.VRMHumanoidBoneName.Hips);
+                        const hNode = vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Head);
+                        const hipsNode = vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Hips);
                         if (hNode) hNode.scale.set(1.6, 1.6, 1.6); // 頭を大きく
                         if (hipsNode) hipsNode.scale.set(0.7, 0.6, 0.7); // 体をコンパクトに
                         
                         // Aポーズ初期化
-                        if(vrm.humanoid.getBoneNode(THREE.VRMHumanoidBoneName.LeftUpperArm))
-                            vrm.humanoid.getBoneNode(THREE.VRMHumanoidBoneName.LeftUpperArm).rotation.z = -0.4;
-                        if(vrm.humanoid.getBoneNode(THREE.VRMHumanoidBoneName.RightUpperArm))
-                            vrm.humanoid.getBoneNode(THREE.VRMHumanoidBoneName.RightUpperArm).rotation.z = 0.4;
+                        if(vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftUpperArm))
+                            vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftUpperArm).rotation.z = -0.4;
+                        if(vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightUpperArm))
+                            vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightUpperArm).rotation.z = 0.4;
                     }
 
                     // カメラ位置調整
@@ -360,6 +361,15 @@
 
                     addAppLog(`独自VRM [${meta.title || 'Model'}] を二頭身モードで読み込みました。`);
 
+                    loadingElement.style.opacity = '0';
+                    setTimeout(() => loadingElement.style.display = 'none', 400);
+                }).catch((err) => {
+                    // ★【修正】ここで例外が発生するとPromiseチェーンが静かに失敗し、
+                    // ローディング画面が消えないまま固まっていたため、catchで確実に復旧させる
+                    console.error(err);
+                    addAppLog(`VRMの初期化に失敗しました: ${err.message}`);
+                    alert("VRMの読み込みに失敗しました。");
+                    createOfficialAvatar();
                     loadingElement.style.opacity = '0';
                     setTimeout(() => loadingElement.style.display = 'none', 400);
                 });
@@ -486,33 +496,33 @@
                 
                 try {
                     if (riggedFace) {
-                        const headBone = h.getBoneNode(THREE.VRMHumanoidBoneName.Head);
-                        const neckBone = h.getBoneNode(THREE.VRMHumanoidBoneName.Neck);
+                        const headBone = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Head);
+                        const neckBone = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Neck);
                         if (headBone) headBone.rotation.set(-riggedFace.head.x, riggedFace.head.y, riggedFace.head.z);
                         if (neckBone) neckBone.rotation.set(-riggedFace.head.x * 0.2, riggedFace.head.y * 0.2, 0);
                         
                         const blendShape = currentVrm.blendShapeProxy;
                         if (blendShape) {
                             if (currentExpression === "auto") {
-                                blendShape.setValue(THREE.VRMBlendShapePresetName.BlinkLeft, riggedFace.eye.l || 0);
-                                blendShape.setValue(THREE.VRMBlendShapePresetName.BlinkRight, riggedFace.eye.r || 0);
-                                blendShape.setValue(THREE.VRMBlendShapePresetName.A, riggedFace.mouth.shape.y || 0);
+                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.BlinkLeft, riggedFace.eye.l || 0);
+                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.BlinkRight, riggedFace.eye.r || 0);
+                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.A, riggedFace.mouth.shape.y || 0);
                             } else {
-                                blendShape.setValue(THREE.VRMBlendShapePresetName.BlinkLeft, 0);
-                                blendShape.setValue(THREE.VRMBlendShapePresetName.BlinkRight, 0);
-                                blendShape.setValue(THREE.VRMBlendShapePresetName.A, 0);
+                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.BlinkLeft, 0);
+                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.BlinkRight, 0);
+                                blendShape.setValue(THREE.VRMSchema.BlendShapePresetName.A, 0);
                             }
                         }
                     }
 
                     if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose) {
-                        const spineBone = h.getBoneNode(THREE.VRMHumanoidBoneName.Spine);
+                        const spineBone = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Spine);
                         if (spineBone) spineBone.rotation.set(-riggedPose.spine.x, riggedPose.spine.y, riggedPose.spine.z);
                         
-                        const lua = h.getBoneNode(THREE.VRMHumanoidBoneName.LeftUpperArm);
-                        const rua = h.getBoneNode(THREE.VRMHumanoidBoneName.RightUpperArm);
-                        const lla = h.getBoneNode(THREE.VRMHumanoidBoneName.LeftLowerArm);
-                        const rla = h.getBoneNode(THREE.VRMHumanoidBoneName.RightLowerArm);
+                        const lua = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftUpperArm);
+                        const rua = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightUpperArm);
+                        const lla = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftLowerArm);
+                        const rla = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightLowerArm);
 
                         if (lua && riggedPose.leftUpperArm) lua.rotation.set(riggedPose.leftUpperArm.x, riggedPose.leftUpperArm.y, riggedPose.leftUpperArm.z - 0.4);
                         if (rua && riggedPose.rightUpperArm) rua.rotation.set(riggedPose.rightUpperArm.x, -riggedPose.rightUpperArm.y, -riggedPose.rightUpperArm.z + 0.4);
@@ -521,8 +531,8 @@
                     }
 
                     if (trackingTarget === "all") {
-                        const lh = h.getBoneNode(THREE.VRMHumanoidBoneName.LeftHand);
-                        const rh = h.getBoneNode(THREE.VRMHumanoidBoneName.RightHand);
+                        const lh = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.LeftHand);
+                        const rh = h.getBoneNode(THREE.VRMSchema.HumanoidBoneName.RightHand);
                         if (lh && riggedLeftHand?.leftWrist) lh.rotation.set(riggedLeftHand.leftWrist.x, riggedLeftHand.leftWrist.y, riggedLeftHand.leftWrist.z);
                         if (rh && riggedRightHand?.rightWrist) rh.rotation.set(riggedRightHand.rightWrist.x, -riggedRightHand.rightWrist.y, -riggedRightHand.rightWrist.z);
                     }
@@ -735,11 +745,11 @@
                 
                 if (!isOfficialAvatar && currentVrm && currentVrm.blendShapeProxy) {
                     const bp = currentVrm.blendShapeProxy;
-                    bp.setValue(THREE.VRMBlendShapePresetName.Surprised, 0);
-                    bp.setValue(THREE.VRMBlendShapePresetName.Angry, 0);
+                    bp.setValue(THREE.VRMSchema.BlendShapePresetName.Surprised, 0);
+                    bp.setValue(THREE.VRMSchema.BlendShapePresetName.Angry, 0);
                     
-                    if (currentExpression === "surprised") bp.setValue(THREE.VRMBlendShapePresetName.Surprised, 1.0);
-                    if (currentExpression === "angry") bp.setValue(THREE.VRMBlendShapePresetName.Angry, 1.0);
+                    if (currentExpression === "surprised") bp.setValue(THREE.VRMSchema.BlendShapePresetName.Surprised, 1.0);
+                    if (currentExpression === "angry") bp.setValue(THREE.VRMSchema.BlendShapePresetName.Angry, 1.0);
                 }
             }
         });
