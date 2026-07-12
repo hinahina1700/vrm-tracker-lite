@@ -412,8 +412,8 @@
 
         createOfficialAvatar();
 
-        // ★【カクつき解消＆1sから0.1s化】
-        // トラッキング処理の間隔を制御し、0.1s (100ms) 以上の超高レスポンス速度で描画を同期させます。
+        // ★【カクつき解消&軽量化】
+        // トラッキング処理の間隔を制御し、負荷を抑えるため0.18s(180ms)間隔で同期させます。
         let lastProcessingTime = 0;
 
         function animate() {
@@ -421,8 +421,8 @@
             controls.update(); 
             
             const now = performance.now();
-            // 0.1秒(100ms)よりも短い間隔(または毎フレーム最高速度)で安全に描画を同期
-            if (now - lastProcessingTime >= 100) { 
+            // 0.18秒(180ms)間隔で、処理負荷を抑えつつ安定して描画を同期
+            if (now - lastProcessingTime >= 180) { 
                 processTrackingData();
                 lastProcessingTime = now;
             }
@@ -452,14 +452,14 @@
 
             try {
                 if (latestFaceLandmarks && latestFaceLandmarks.length > 0) {
-                    const adjustedFace = latestFaceLandmarks.map(pt => ({ x: pt.x, y: 1.0 - pt.y, z: pt.z }));
+                    const adjustedFace = latestFaceLandmarks.map(pt => ({ x: 1.0 - pt.x, y: 1.0 - pt.y, z: pt.z }));
                     riggedFace = Kalidokit.Face.solve(adjustedFace, { runtime: "mediapipe", video: videoElement });
                 }
             } catch(e) {}
 
             try {
                 if (latestPoseLandmarks && latestPoseLandmarks.length > 23) {
-                    const adjustedPose = latestPoseLandmarks.map(pt => ({ x: pt.x, y: 1.0 - pt.y, z: pt.z, visibility: pt.visibility }));
+                    const adjustedPose = latestPoseLandmarks.map(pt => ({ x: 1.0 - pt.x, y: 1.0 - pt.y, z: pt.z, visibility: pt.visibility }));
                     riggedPose = Kalidokit.Pose.solve(adjustedPose, adjustedPose, { runtime: "mediapipe", video: videoElement });
                 }
             } catch(e) {}
@@ -484,8 +484,8 @@
                         const hx = clampAngle(riggedFace.head.x, 0.6);
                         const hy = clampAngle(riggedFace.head.y, 0.6);
                         const hz = clampAngle(riggedFace.head.z, 0.6);
-                        robotNodes.head.rotation.set(-hx * 0.8, -hy, -hz);
-                        robotNodes.neck.rotation.set(-hx * 0.2, -hy * 0.2, 0);
+                        robotNodes.head.rotation.set(hx * 0.8, -hy, -hz);
+                        robotNodes.neck.rotation.set(hx * 0.2, -hy * 0.2, 0);
                     }
                     if ((trackingTarget === "body" || trackingTarget === "all") && riggedPose && riggedPose.Spine) {
                         robotNodes.spine.rotation.set(
@@ -520,8 +520,8 @@
                         const hx = clampAngle(riggedFace.head.x, 0.6);
                         const hy = clampAngle(riggedFace.head.y, 0.6);
                         const hz = clampAngle(riggedFace.head.z, 0.6);
-                        if (headBone) headBone.rotation.set(-hx, hy, hz);
-                        if (neckBone) neckBone.rotation.set(-hx * 0.2, hy * 0.2, 0);
+                        if (headBone) headBone.rotation.set(hx, -hy, -hz);
+                        if (neckBone) neckBone.rotation.set(hx * 0.2, -hy * 0.2, 0);
                         
                         const blendShape = currentVrm.blendShapeProxy;
                         if (blendShape) {
@@ -584,12 +584,14 @@
             holistic.setOptions({
                 modelComplexity: 0,
                 smoothLandmarks: true,
-                refineFaceLandmarks: true,
+                refineFaceLandmarks: false,
                 enableSegmentation: false,
                 smoothSegmentation: false,
                 enableFaceGeometry: false, 
                 enablePoseTracking: true,
-                enableHandTracking: true 
+                enableHandTracking: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
             });
 
             holistic.onResults((results) => {
@@ -646,7 +648,7 @@
                 }, 400);
                 statusDot.className = "status-dot active";
                 statusText.innerText = `稼働中`;
-                addAppLog("システムが最高速度(10FPS/0.1s単位以上)で安定稼働を開始しました。");
+                addAppLog("システムが軽量設定(約5.5FPS/0.18s間隔)で安定稼働を開始しました。");
             } catch (e) {
                 updateProgress(0, "カメラが見つかりません");
             }
