@@ -95,8 +95,10 @@
             <div class="controls" id="expression-buttons">
                 <span style="color:#aaa;">表情:</span>
                 <button class="btn active" data-exp="auto">自動</button>
-                <button class="btn" data-exp="surprised">驚き</button>
+                <button class="btn" data-exp="joy">喜び</button>
+                <button class="btn" data-exp="fun">楽しい</button>
                 <button class="btn" data-exp="angry">怒り</button>
+                <button class="btn" data-exp="sorrow">悲しみ</button>
             </div>
             <div class="controls">
                 <span style="color:#aaa;">背景色:</span>
@@ -173,7 +175,22 @@
             return Math.max(-limit, Math.min(limit, v));
         }
 
-        // ★【修正】ログを復活させて画面上に表示する処理
+        // ★【追加】初期スキン(ロボット)の表情差分：バイザーと目の色で感情を表現
+        const EXPRESSION_COLORS = {
+            auto:     { visor: 0x00ffcc, emissive: 0x004433 },
+            joy:      { visor: 0xffe066, emissive: 0x554400 },
+            fun:      { visor: 0xff8fd6, emissive: 0x55153f },
+            angry:    { visor: 0xff4d4d, emissive: 0x550000 },
+            sorrow:   { visor: 0x66aaff, emissive: 0x001a55 }
+        };
+        function updateRobotExpressionColor(expr) {
+            if (!robotNodes.visorMat) return;
+            const c = EXPRESSION_COLORS[expr] || EXPRESSION_COLORS.auto;
+            robotNodes.visorMat.color.setHex(c.visor);
+            robotNodes.visorMat.emissive.setHex(c.emissive);
+        }
+
+        // ★【追加】ログを復活させて画面上に表示する処理
         function addAppLog(text) {
             const logBox = document.getElementById('log-content');
             if (logBox) {
@@ -270,6 +287,21 @@
             visor.position.set(0, 0.14, 0.125);
             headNode.add(visor);
 
+            // ★【追加】初期スキンにも表情差分をつけるための目・口パーツ
+            // (まばたき・口パク・表情ごとの色変化に使う)
+            const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a });
+            const leftEyeMesh = new THREE.Mesh(new THREE.SphereGeometry(0.016, 10, 10), eyeMat);
+            leftEyeMesh.position.set(0.05, 0.105, 0.125);
+            headNode.add(leftEyeMesh);
+            const rightEyeMesh = new THREE.Mesh(new THREE.SphereGeometry(0.016, 10, 10), eyeMat);
+            rightEyeMesh.position.set(-0.05, 0.105, 0.125);
+            headNode.add(rightEyeMesh);
+
+            const mouthMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a });
+            const mouthMesh = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.012), mouthMat);
+            mouthMesh.position.set(0, 0.07, 0.128);
+            headNode.add(mouthMesh);
+
             // 手足はさらに短く・丸く、ちんまりした印象に
             const luaMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.018, 0.07, 12), bodyMat);
             luaMesh.rotation.z = -Math.PI / 2; luaMesh.position.x = 0.035;
@@ -315,6 +347,11 @@
             robotNodes.rightUpperArm = rightUpperArm;
             robotNodes.rightLowerArm = rightLowerArm;
             robotNodes.rightHand = rightHand;
+            robotNodes.visor = visor;
+            robotNodes.visorMat = visorMat;
+            robotNodes.leftEye = leftEyeMesh;
+            robotNodes.rightEye = rightEyeMesh;
+            robotNodes.mouth = mouthMesh;
             
             isOfficialAvatar = true;
             document.getElementById('meta-name').innerText = "ライト・ロボ (Chibi-Robo)";
@@ -325,6 +362,7 @@
             controls.target.set(0.0, 0.33, 0.0); 
             camera.position.set(0.0, 0.42, 0.85);
             addAppLog("初期ロボットキャラを二頭身スタイルで生成しました。");
+            updateRobotExpressionColor(typeof currentExpression !== 'undefined' ? currentExpression : 'auto');
         }
 
         // --- VRMファイルのロード処理 ---
@@ -774,17 +812,21 @@
                 e.target.classList.add('active');
                 currentExpression = e.target.getAttribute('data-exp');
                 addAppLog(`表情を [${currentExpression}] に固定しました。`);
-                
+
+                // 初期スキン（ロボット）は表情ごとにバイザー色を変える
+                updateRobotExpressionColor(currentExpression);
+
                 if (!isOfficialAvatar && currentVrm && currentVrm.blendShapeProxy) {
-                    // ★【修正】VRM 0.x の表情プリセットには"Surprised"は存在せず、
-                    // 常にundefinedを渡していたため「驚き」ボタンが無反応だった。
-                    // 近い表現として標準プリセットの"Fun"を使用する。
+                    // ★【修正】表情プリセットをVRM 0.xで実在する一式(Joy/Fun/Angry/Sorrow)に対応。
+                    // "Surprised"は0.x仕様に存在せずボタンが無反応だったバグも解消。
                     const bp = currentVrm.blendShapeProxy;
-                    bp.setValue(THREE.VRMSchema.BlendShapePresetName.Fun, 0);
-                    bp.setValue(THREE.VRMSchema.BlendShapePresetName.Angry, 0);
-                    
-                    if (currentExpression === "surprised") bp.setValue(THREE.VRMSchema.BlendShapePresetName.Fun, 1.0);
-                    if (currentExpression === "angry") bp.setValue(THREE.VRMSchema.BlendShapePresetName.Angry, 1.0);
+                    const P = THREE.VRMSchema.BlendShapePresetName;
+                    [P.Joy, P.Fun, P.Angry, P.Sorrow].forEach(p => bp.setValue(p, 0));
+
+                    if (currentExpression === "joy") bp.setValue(P.Joy, 1.0);
+                    if (currentExpression === "fun") bp.setValue(P.Fun, 1.0);
+                    if (currentExpression === "angry") bp.setValue(P.Angry, 1.0);
+                    if (currentExpression === "sorrow") bp.setValue(P.Sorrow, 1.0);
                 }
             }
         });
